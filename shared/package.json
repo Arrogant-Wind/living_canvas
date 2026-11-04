@@ -1,0 +1,11 @@
+{
+  "name": "@lc/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc -p ." },
+  "dependencies": { "zod": "^3.25.0", "elkjs": "^0.12.1" },
+  "devDependencies": { "vitest": "^3.2.0", "typescript": "^5.8.0" }
+}

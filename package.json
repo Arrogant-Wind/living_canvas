@@ -1,0 +1,10 @@
+{
+  "name": "living-canvas",
+  "private": true,
+  "type": "module",
+  "workspaces": ["shared", "server", "web"],
+  "scripts": {
+    "test": "npm test -ws --if-present",
+    "dev": "npm run dev -w server & npm run dev -w web"
+  }
+}
