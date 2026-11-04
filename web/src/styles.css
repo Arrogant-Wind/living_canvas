@@ -8,3 +8,30 @@ html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif;
 .lc-inspector label { display: flex; flex-direction: column; gap: 2px; color: #555; }
 .lc-inspector input, .lc-inspector select, .lc-inspector textarea { font: inherit; font-size: 13px; padding: 3px 5px; border: 1px solid #ccc; border-radius: 4px; }
 .lc-inspector .lc-check { flex-direction: row; align-items: center; gap: 6px; }
+.lc-proposal { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 400; background: #fff; border: 1.5px solid #7c4dff; border-radius: 10px; padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); font-size: 13px; min-width: 300px; max-width: 460px; }
+.lc-proposal-title { font-weight: 600; color: #5a2fd6; margin-bottom: 6px; }
+.lc-proposal-list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 240px; overflow: auto; }
+.lc-proposal-list li { padding: 2px 0; }
+.lc-proposal-list label { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; }
+.lc-proposal-actions { display: flex; gap: 6px; }
+.lc-proposal-actions button { font: inherit; padding: 4px 10px; border-radius: 5px; border: 1px solid #999; background: #fff; cursor: pointer; }
+.lc-proposal-actions .lc-ok { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+.lc-proposal-actions .lc-no { background: #c62828; color: #fff; border-color: #c62828; }
+.lc-chat { width: 320px; border-left: 1px solid #ddd; display: flex; flex-direction: column; background: #fff; font-size: 13px; }
+.lc-chat-head { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #eee; }
+.lc-chat-list { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.lc-chat-empty { color: #888; }
+.lc-msg { padding: 7px 9px; border-radius: 8px; white-space: pre-wrap; line-height: 1.4; max-width: 92%; }
+.lc-msg-user { align-self: flex-end; background: #e3f2fd; }
+.lc-msg-ai { align-self: flex-start; background: #f3eeff; }
+.lc-msg-error { align-self: stretch; background: #fdecea; color: #b71c1c; font-size: 12px; }
+.lc-thinking { color: #7c4dff; font-style: italic; }
+.lc-chat-input { border-top: 1px solid #eee; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.lc-chat-input textarea { font: inherit; resize: none; border: 1px solid #ccc; border-radius: 6px; padding: 6px; }
+.lc-chat-input > button { align-self: flex-end; font: inherit; padding: 4px 14px; border-radius: 5px; border: 1px solid #7c4dff; background: #7c4dff; color: #fff; cursor: pointer; }
+.lc-chat-input > button:disabled { opacity: .5; cursor: default; }
+.lc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.lc-chip { background: #ffb300; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+.lc-tags { display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+.lc-tags button { font: inherit; text-align: left; padding: 5px 8px; border: 0; border-bottom: 1px solid #eee; background: #fafafa; cursor: pointer; }
+.lc-tags button:hover { background: #f3eeff; }

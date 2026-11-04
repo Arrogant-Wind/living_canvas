@@ -1,6 +1,6 @@
 import type { Graph, Op } from '@lc/shared'
 import { describe, expect, it } from 'vitest'
-import { proposalToPartials } from '../src/canvas/applyProposal'
+import { estimateNoteHeight, NOTE_W, proposalToPartials } from '../src/canvas/applyProposal'
 
 const graph: Graph = {
   nodes: [
@@ -42,6 +42,23 @@ describe('proposalToPartials', () => {
       expect.objectContaining({ label: 'Sửa bước: Generate bằng API', shapeIds: ['shape:n2'], ops: [expect.anything()] }),
     ])
     expect(r.create).toEqual([])
+  })
+
+  it('places long review notes above their target without overlapping each other', async () => {
+    const long = 'Lệch dữ liệu: '.repeat(20)
+    const r = await proposalToPartials(
+      graph,
+      boxes,
+      [
+        { op: 'add_note', targets: ['n2'], text: long, kind: 'review' },
+        { op: 'add_note', targets: ['n2'], text: 'ngắn', kind: 'review' },
+      ],
+      'p4',
+    )
+    const notes = r.create.filter((s) => s.type === 'note')
+    const h = notes.map((n) => estimateNoteHeight(String((n.props.richText as any).content[0].content[0].text)))
+    notes.forEach((n, i) => expect(n.y + h[i]).toBeLessThan(boxes.n2.y))
+    expect(Math.abs(notes[0].x - notes[1].x)).toBeGreaterThanOrEqual(NOTE_W)
   })
 
   it('reports ops that reference missing nodes', async () => {

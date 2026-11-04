@@ -4,7 +4,7 @@ export type Box = { x: number; y: number; w: number; h: number }
 
 export const NODE_W = 200
 export const NODE_H = 72
-const GAP_X = 60
+const GAP_X = 140
 const STEP_Y = 40
 const PAD = 20
 

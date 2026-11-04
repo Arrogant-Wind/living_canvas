@@ -23,7 +23,7 @@ export function mountProposal(editor: Editor, p: MountedProposal) {
       for (const it of p.items)
         for (const id of it.ops.length ? it.shapeIds : [])
           if (editor.getShape(id as TLShapeId))
-            editor.updateShape({ id: id as TLShapeId, type: editor.getShape(id as TLShapeId)!.type, meta: { ...editor.getShape(id as TLShapeId)!.meta, pendingOp: p.id } } as any)
+            editor.updateShape({ id: id as TLShapeId, type: editor.getShape(id as TLShapeId)!.type, meta: { pendingOp: p.id } } as any)
     },
     { history: 'ignore' },
   )
@@ -35,10 +35,8 @@ function clear(editor: Editor, p: MountedProposal) {
       const ghosts = ghostCreates(p).map((c) => c.id as TLShapeId).filter((id) => editor.getShape(id))
       editor.deleteShapes(ghosts)
       for (const s of editor.getCurrentPageShapes())
-        if (s.meta.pendingOp === p.id) {
-          const { pendingOp: _, ...meta } = s.meta
-          editor.updateShape({ id: s.id, type: s.type, meta } as any)
-        }
+        // updateShape gộp meta với giá trị cũ: phải gán null mới xóa được.
+        if (s.meta.pendingOp === p.id) editor.updateShape({ id: s.id, type: s.type, meta: { pendingOp: null } } as any)
     },
     { history: 'ignore' },
   )

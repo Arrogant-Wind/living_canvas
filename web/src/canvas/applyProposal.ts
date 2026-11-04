@@ -1,4 +1,4 @@
-import { applyOps, layoutNewNodes, NODE_H, NODE_W, type Box, type Graph, type Op, type OpError } from '@lc/shared'
+import { applyOps, layoutNewNodes, NODE_H, NODE_W, overlaps, type Box, type Graph, type Op, type OpError } from '@lc/shared'
 import { WF_NODE } from './storeToGraph'
 
 /** Phần thuần (không import runtime tldraw) để test được trong node. */
@@ -36,6 +36,11 @@ export interface Proposal {
   reply: string
   items: ProposalItem[]
 }
+
+export const NOTE_W = 200
+const NOTE_GAP = 40
+/** Chiều cao ước lượng của note cỡ `s` (khoảng 16 ký tự một dòng, 24px một dòng). */
+export const estimateNoteHeight = (text: string) => Math.max(NOTE_W, 48 + Math.ceil(text.length / 16) * 24)
 
 const sid = (graphId: string) => `shape:${graphId}` as ShapeId
 
@@ -108,6 +113,7 @@ export async function proposalToPartials(
   }
 
   let edgeSeq = 0
+  const noteBoxes: Box[] = []
   ops.forEach((op, k) => {
     if (failed.has(k)) return
     switch (op.op) {
@@ -145,11 +151,16 @@ export async function proposalToPartials(
       case 'add_note': {
         const targets = op.targets.map(res)
         const t = pos(targets[0] ?? '')
+        // Note tự cao lên theo chữ: đặt hẳn phía trên node đích, dời sang phải tới khi không chồng note khác.
+        const h = estimateNoteHeight(op.text)
+        let box = { x: t.x, y: t.y - NOTE_GAP - h, w: NOTE_W, h }
+        while (noteBoxes.some((b) => overlaps(box, b, 20))) box = { ...box, x: box.x + NOTE_W + 20 }
+        noteBoxes.push(box)
         create.push({
           id: sid(`${proposalId}-note${k}`),
           type: 'note',
-          x: t.x + t.w * 0.6,
-          y: t.y - 150,
+          x: box.x,
+          y: box.y,
           props: { richText: plainToRichText(op.text), color: op.kind === 'review' ? 'orange' : 'yellow', size: 's' },
           meta: { author: 'ai', kind: op.kind, targetIds: targets },
         })

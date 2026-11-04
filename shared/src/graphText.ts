@@ -9,9 +9,10 @@ export function nodeLine(n: GraphNode): string {
   return parts.join(' | ')
 }
 
+/** `e1: a -[nhãn]-> b`. Có id để model sửa hoặc xóa được cạnh. */
 export function edgeLine(e: GraphEdge): string {
-  if (e.type === 'data') return `${e.from} ..[${e.label ?? ''}]..> ${e.to}        (data edge)`
-  return e.label ? `${e.from} -[${e.label}]-> ${e.to}` : `${e.from} --> ${e.to}`
+  if (e.type === 'data') return `${e.id}: ${e.from} ..[${e.label ?? ''}]..> ${e.to}        (data edge)`
+  return e.label ? `${e.id}: ${e.from} -[${e.label}]-> ${e.to}` : `${e.id}: ${e.from} --> ${e.to}`
 }
 
 /** In IR thành text gọn cho model đọc. Node con thụt 2 dấu cách dưới cha. */
