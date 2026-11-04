@@ -38,3 +38,13 @@ html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif;
 .lc-chat-head { display: flex; justify-content: space-between; align-items: center; }
 .lc-save { font-weight: 400; font-size: 11px; color: #888; }
 .lc-save-error { color: #c62828; font-weight: 600; }
+.lc-mono { font-family: ui-monospace, monospace !important; font-size: 11px !important; }
+.lc-hover { position: absolute; z-index: 350; pointer-events: none; background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.14); padding: 8px 10px; width: 260px; font-size: 12px; color: #222; }
+.lc-hover-title { font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; gap: 6px; }
+.lc-hover-kind { font-weight: 400; font-size: 11px; color: #666; border: 1px solid #ccc; border-radius: 4px; padding: 0 4px; }
+.lc-hover-desc { margin: 4px 0 0; color: #444; }
+.lc-hover-sec { margin-top: 6px; }
+.lc-hover-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #888; }
+.lc-hover ul { margin: 2px 0 0; padding-left: 16px; }
+.lc-hover pre { margin: 3px 0 0; background: #f6f6f6; border-radius: 4px; padding: 4px 6px; font-size: 10.5px; max-height: 160px; overflow: hidden; white-space: pre-wrap; }
+.lc-hover-empty { margin: 4px 0 0; color: #999; font-style: italic; }

@@ -4,8 +4,10 @@ import {
   T,
   useEditor,
   useValue,
+  type Editor,
   type RecordProps,
   type TLShape,
+  type TLShapePartial,
 } from 'tldraw'
 import { WF_NODE } from './storeToGraph'
 
@@ -33,8 +35,29 @@ export interface WfNodeProps {
   outputs: string
   description: string
   container: boolean
+  inputSchema?: string
+  outputSchema?: string
 }
 export type WfNodeShape = TLShape<typeof WF_NODE>
+
+/** Kích thước chữ tiêu đề, dùng chung cho hiển thị và đo. */
+const TITLE = { fontSize: 15, lineHeight: 1.3, fontWeight: '600', fontFamily: 'system-ui, sans-serif' }
+const PAD_X = 12
+const PAD_Y = 10
+export const MIN_H = 56
+/** Khoảng trống quanh các ô con bên trong khung. */
+const FRAME_PAD = 20
+
+/** Chiều cao phần tiêu đề (đã xuống dòng theo bề rộng ô). */
+export function titleHeight(editor: Editor, title: string, w: number): number {
+  const m = editor.textMeasure.measureText(title || ' ', {
+    ...TITLE,
+    fontStyle: 'normal',
+    maxWidth: Math.max(40, w - PAD_X * 2 - 44), // chừa chỗ cho nhãn kind
+    padding: '0px',
+  })
+  return Math.ceil(m.h)
+}
 
 export class WfNodeShapeUtil extends BaseFrameLikeShapeUtil<WfNodeShape> {
   static override type = WF_NODE
@@ -47,10 +70,12 @@ export class WfNodeShapeUtil extends BaseFrameLikeShapeUtil<WfNodeShape> {
     outputs: T.string,
     description: T.string,
     container: T.boolean,
+    inputSchema: T.string.optional(),
+    outputSchema: T.string.optional(),
   }
 
   override getDefaultProps(): WfNodeProps {
-    return { w: 200, h: 72, title: 'Bước mới', kind: 'unknown', inputs: '', outputs: '', description: '', container: false }
+    return { w: 200, h: MIN_H, title: 'Bước mới', kind: 'unknown', inputs: '', outputs: '', description: '', container: false }
   }
 
   override isFrameLike(shape: WfNodeShape) {
@@ -72,6 +97,38 @@ export class WfNodeShapeUtil extends BaseFrameLikeShapeUtil<WfNodeShape> {
     return true
   }
 
+  /** Ô thường: cao vừa đủ cho tiêu đề. Khung: không nhỏ hơn phần chứa các ô con. */
+  private fit(shape: WfNodeShape): WfNodeShape {
+    const head = titleHeight(this.editor, shape.props.title, shape.props.w) + PAD_Y * 2
+    let { w, h } = shape.props
+    if (!shape.props.container) h = Math.max(MIN_H, head)
+    else {
+      h = Math.max(h, head + FRAME_PAD)
+      for (const id of this.editor.getSortedChildIdsForParent(shape.id)) {
+        const c = this.editor.getShape(id)
+        if (!c || c.type !== WF_NODE) continue
+        const cp = c.props as WfNodeProps
+        w = Math.max(w, c.x + cp.w + FRAME_PAD)
+        h = Math.max(h, c.y + cp.h + FRAME_PAD)
+      }
+    }
+    return w === shape.props.w && h === shape.props.h ? shape : { ...shape, props: { ...shape.props, w, h } }
+  }
+
+  override onBeforeCreate(next: WfNodeShape) {
+    return this.fit(next)
+  }
+  override onBeforeUpdate(_prev: WfNodeShape, next: WfNodeShape) {
+    return this.fit(next)
+  }
+
+  /** Ô con di chuyển hoặc to ra thì khung nới theo, không để ô con tràn ra ngoài viền. */
+  override onChildrenChange(shape: WfNodeShape): TLShapePartial[] | void {
+    if (!shape.props.container) return
+    const fitted = this.fit(shape)
+    if (fitted !== shape) return [{ id: shape.id, type: WF_NODE, props: { w: fitted.props.w, h: fitted.props.h } }]
+  }
+
   override component(shape: WfNodeShape) {
     return <WfNode shape={shape} />
   }
@@ -83,6 +140,11 @@ export class WfNodeShapeUtil extends BaseFrameLikeShapeUtil<WfNodeShape> {
   }
 }
 
+/** Vị trí đầu tiên cho ô con trong khung: ngay dưới tiêu đề của khung. */
+export function frameContentTop(editor: Editor, frame: WfNodeShape) {
+  return titleHeight(editor, frame.props.title, frame.props.w) + PAD_Y * 2
+}
+
 function WfNode({ shape }: { shape: WfNodeShape }) {
   const editor = useEditor()
   const editing = useValue('editing', () => editor.getEditingShapeId() === shape.id, [editor, shape.id])
@@ -90,25 +152,23 @@ function WfNode({ shape }: { shape: WfNodeShape }) {
   const ghost = !!shape.meta.ghost
   const pending = !!shape.meta.pendingOp
   const c = ghost ? GHOST : KIND_COLORS[p.kind] ?? KIND_COLORS.unknown
-  const io = [p.inputs && `in: ${p.inputs}`, p.outputs && `out: ${p.outputs}`].filter(Boolean).join('  →  ')
 
   return (
     <HTMLContainer
       style={{
         width: p.w,
         height: p.h,
-        background: p.container ? (ghost ? '#faf7ff' : 'rgba(255,255,255,0.6)') : c.fill,
+        background: p.container ? (ghost ? '#faf7ff' : 'rgba(255,255,255,0.55)') : c.fill,
         border: `${pending ? 3 : 1.5}px ${ghost ? 'dashed' : 'solid'} ${pending ? '#ff8f00' : c.stroke}`,
         borderRadius: 8,
         opacity: ghost ? 0.85 : 1,
-        padding: '6px 10px',
+        padding: `${PAD_Y}px ${PAD_X}px`,
         boxSizing: 'border-box',
-        fontFamily: 'system-ui, sans-serif',
         color: ghost ? '#5a2fd6' : '#1a1a1a',
         pointerEvents: 'all',
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: p.container ? 'flex-start' : 'center',
+        alignItems: p.container ? 'flex-start' : 'center',
+        gap: 6,
         overflow: 'hidden',
       }}
     >
@@ -125,17 +185,16 @@ function WfNode({ shape }: { shape: WfNodeShape }) {
           onChange={(e) =>
             editor.updateShape<WfNodeShape>({ id: shape.id, type: WF_NODE, props: { title: e.currentTarget.value } })
           }
-          style={{ font: 'inherit', fontWeight: 600, fontSize: 15, width: '100%' }}
+          style={{ ...TITLE, width: '100%' }}
         />
       ) : (
-        <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.25 }}>
-          {p.title}
-          {p.kind !== 'unknown' && (
-            <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 6, color: c.stroke }}>{p.kind}</span>
-          )}
-        </div>
+        <div style={{ ...TITLE, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{p.title}</div>
       )}
-      {io && <div style={{ fontSize: 11, color: '#555', marginTop: 3 }}>{io}</div>}
+      {p.kind !== 'unknown' && (
+        <span style={{ fontSize: 11, color: c.stroke, border: `1px solid ${c.stroke}`, borderRadius: 4, padding: '0 4px', flexShrink: 0 }}>
+          {p.kind}
+        </span>
+      )}
     </HTMLContainer>
   )
 }

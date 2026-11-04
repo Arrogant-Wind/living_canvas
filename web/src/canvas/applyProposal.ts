@@ -114,6 +114,8 @@ export async function proposalToPartials(
         inputs: (n.inputs ?? []).join(', '),
         outputs: (n.outputs ?? []).join(', '),
         description: n.description ?? '',
+        ...(n.inputSchema && { inputSchema: n.inputSchema }),
+        ...(n.outputSchema && { outputSchema: n.outputSchema }),
         container: kids.has(id),
       },
       meta: { ghost: proposalId },
@@ -141,6 +143,7 @@ export async function proposalToPartials(
           x: 0,
           y: 0,
           props: {
+            kind: 'elbow',
             start: { x: a.x + a.w, y: a.y + a.h / 2 },
             end: { x: b.x, y: b.y + b.h / 2 },
             richText: plainToRichText(op.label ?? ''),

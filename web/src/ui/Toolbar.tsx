@@ -1,6 +1,6 @@
 import { createShapeId, toRichText, useEditor, useValue } from 'tldraw'
 import { graphId, WF_NODE } from '../canvas/storeToGraph'
-import type { WfNodeShape } from '../canvas/WfNodeShape'
+import { MIN_H, type WfNodeShape } from '../canvas/WfNodeShape'
 
 const KINDS = ['unknown', 'agent', 'llm', 'code', 'human'] as const
 
@@ -16,7 +16,7 @@ export function Toolbar() {
     const c = editor.getViewportPageBounds().center
     const id = createShapeId()
     const w = container ? 420 : 200
-    const h = container ? 260 : 72
+    const h = container ? 260 : MIN_H
     editor.createShape<WfNodeShape>({
       id,
       type: WF_NODE,
@@ -74,6 +74,14 @@ export function Toolbar() {
           <label>
             Trả ra
             <input value={one.props.outputs} placeholder="x, y" onChange={(e) => set({ outputs: e.target.value })} />
+          </label>
+          <label>
+            Schema vào (JSON, không bắt buộc)
+            <textarea className="lc-mono" value={one.props.inputSchema ?? ''} rows={2} onChange={(e) => set({ inputSchema: e.target.value })} />
+          </label>
+          <label>
+            Schema ra (JSON, không bắt buộc)
+            <textarea className="lc-mono" value={one.props.outputSchema ?? ''} rows={2} onChange={(e) => set({ outputSchema: e.target.value })} />
           </label>
           <label>
             Mô tả

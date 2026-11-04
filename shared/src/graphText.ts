@@ -1,11 +1,15 @@
 import type { Graph, GraphEdge, GraphNode } from './ir'
 
+const oneLine = (s: string) => s.replace(/\s*\n\s*/g, ' ').trim()
+
 export function nodeLine(n: GraphNode): string {
   const parts = [n.id, n.title, `kind=${n.kind ?? '?'}`]
   if (n.parentId) parts.push(`parent=${n.parentId}`)
   if (n.inputs?.length) parts.push(`in: ${n.inputs.join(', ')}`)
   if (n.outputs?.length) parts.push(`out: ${n.outputs.join(', ')}`)
-  if (n.description) parts.push(`desc: ${n.description}`)
+  if (n.inputSchema) parts.push(`in_schema: ${oneLine(n.inputSchema)}`)
+  if (n.outputSchema) parts.push(`out_schema: ${oneLine(n.outputSchema)}`)
+  if (n.description) parts.push(`desc: ${oneLine(n.description)}`)
   return parts.join(' | ')
 }
 

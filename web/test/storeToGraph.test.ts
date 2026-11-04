@@ -30,7 +30,7 @@ const bind = (id: string, arrowId: string, to: string, terminal: 'start' | 'end'
 
 describe('storeToGraph', () => {
   const records = [
-    node('a', 'Tìm hiểu dữ kiện', { kind: 'agent', outputs: 'dữ kiện, nguồn' }),
+    node('a', 'Tìm hiểu dữ kiện', { kind: 'agent', outputs: 'dữ kiện, nguồn', outputSchema: '{"type":"array"}' }),
     node('b', 'Chuẩn hóa', { container: true }),
     { ...node('c', 'Nhân vật'), parentId: 'shape:b' },
     node('g', 'Ghost', {}, { ghost: 'p1' }),
@@ -54,6 +54,8 @@ describe('storeToGraph', () => {
     expect(g.nodes.map((n) => n.id)).toEqual(['a', 'b', 'c'])
     expect(g.nodes[0]).toMatchObject({ title: 'Tìm hiểu dữ kiện', kind: 'agent', outputs: ['dữ kiện', 'nguồn'] })
     expect(g.nodes[0].inputs).toBeUndefined()
+    expect(g.nodes[0].outputSchema).toBe('{"type":"array"}')
+    expect(g.nodes[0].inputSchema).toBeUndefined()
     expect(g.nodes[2].parentId).toBe('b')
     expect(g.edges).toEqual([{ id: 'e1', from: 'a', to: 'b', label: 'dữ kiện', type: 'flow' }])
     expect(g.notes).toEqual([{ id: 'n1', text: 'bước này còn mơ hồ', author: 'user', targetIds: ['b'], kind: 'comment' }])

@@ -90,3 +90,25 @@ export async function layoutNewNodes(
   }
   return out
 }
+
+/**
+ * Box `id` vừa to ra từ `before` thành `boxes[id]`. Trả về độ dịch cho các box khác:
+ * box nằm bên phải (cùng dải dọc) dịch phải đúng phần rộng thêm, box nằm bên dưới
+ * (cùng dải ngang) dịch xuống đúng phần cao thêm. Giữ nguyên khoảng cách giữa các ô.
+ */
+export function pushAside(boxes: Record<string, Box>, id: string, before: Box): Record<string, { dx: number; dy: number }> {
+  const now = boxes[id]
+  const growX = now.x + now.w - (before.x + before.w)
+  const growY = now.y + now.h - (before.y + before.h)
+  const out: Record<string, { dx: number; dy: number }> = {}
+  if (growX <= 0 && growY <= 0) return out
+  for (const [k, b] of Object.entries(boxes)) {
+    if (k === id) continue
+    const sameRow = b.y < now.y + now.h && b.y + b.h > now.y
+    const sameCol = b.x < now.x + now.w && b.x + b.w > now.x
+    const dx = growX > 0 && sameRow && b.x >= before.x + before.w - 1 ? growX : 0
+    const dy = growY > 0 && sameCol && b.y >= before.y + before.h - 1 ? growY : 0
+    if (dx || dy) out[k] = { dx, dy }
+  }
+  return out
+}

@@ -136,6 +136,8 @@ function applyExistingOp(editor: Editor, op: Op): boolean {
       if (op.inputs !== undefined) props.inputs = op.inputs.join(', ')
       if (op.outputs !== undefined) props.outputs = op.outputs.join(', ')
       if (op.description !== undefined) props.description = op.description
+      if (op.inputSchema !== undefined) props.inputSchema = op.inputSchema
+      if (op.outputSchema !== undefined) props.outputSchema = op.outputSchema
       editor.updateShape({ id: s.id, type: WF_NODE, props } as any)
       return true
     }

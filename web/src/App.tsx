@@ -1,6 +1,15 @@
-import type { Graph } from '@lc/shared'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Tldraw, useValue, type Editor } from 'tldraw'
+import { pushAside, type Box, type Graph } from '@lc/shared'
+import {
+  ArrowBindingUtil,
+  ArrowShapeKindStyle,
+  Tldraw,
+  useValue,
+  type BindingOnShapeDeleteOptions,
+  type Editor,
+  type TLArrowBinding,
+  type TLShapeId,
+} from 'tldraw'
 import { api, type ChatMsg } from './api'
 import { createAutosaver, type SaveStatus } from './autosave'
 import { graphId, WF_NODE } from './canvas/storeToGraph'
@@ -8,9 +17,55 @@ import { WfNodeShapeUtil } from './canvas/WfNodeShape'
 import { currentGraph, useProposal } from './proposal/useProposal'
 import { ChatPanel } from './ui/ChatPanel'
 import { ProposalBar } from './ui/ProposalBar'
+import { HoverCard } from './ui/HoverCard'
 import { Toolbar } from './ui/Toolbar'
 
 const shapeUtils = [WfNodeShapeUtil]
+
+/** Xóa ô thì xóa luôn mũi tên nối vào nó, không để mũi tên lơ lửng. */
+class WfArrowBindingUtil extends ArrowBindingUtil {
+  override onBeforeDeleteToShape({ binding, shape }: BindingOnShapeDeleteOptions<TLArrowBinding>) {
+    if (shape.type === WF_NODE && this.editor.getShape(binding.fromId)) this.editor.deleteShapes([binding.fromId])
+  }
+}
+const bindingUtils = [WfArrowBindingUtil]
+
+function Overlay() {
+  return (
+    <>
+      <Toolbar />
+      <HoverCard />
+    </>
+  )
+}
+// Bảng style mặc định của tldraw che góc phải canvas mà workflow không cần.
+const components = { InFrontOfTheCanvas: Overlay, StylePanel: null }
+
+/** Quy ước riêng của canvas workflow. */
+function setupWorkflowCanvas(editor: Editor) {
+  // Mũi tên người dùng vẽ cũng là mũi tên gấp khúc bám vào cạnh ô, như mũi tên AI tạo.
+  editor.setStyleForNextShapes(ArrowShapeKindStyle, 'elbow')
+  // Khung (ở cấp trang) to ra thì đẩy các ô bên phải / bên dưới ra, không để khung đè lên chúng.
+  editor.sideEffects.registerAfterChangeHandler('shape', (prev, next) => {
+    if (next.type !== WF_NODE || next.parentId !== editor.getCurrentPageId() || !(next.props as any).container) return
+    const a = prev.props as any
+    const b = next.props as any
+    if (b.w <= a.w && b.h <= a.h) return
+    const boxes: Record<string, Box> = {}
+    for (const s of editor.getCurrentPageShapes()) {
+      if (s.parentId !== editor.getCurrentPageId() || s.type === 'arrow') continue
+      const bb = editor.getShapePageBounds(s.id)
+      if (bb) boxes[s.id] = { x: bb.x, y: bb.y, w: bb.w, h: bb.h }
+    }
+    boxes[next.id] = { x: next.x, y: next.y, w: b.w, h: b.h }
+    const shift = pushAside(boxes, next.id, { x: prev.x, y: prev.y, w: a.w, h: a.h })
+    const updates = Object.entries(shift).map(([id, d]) => {
+      const s = editor.getShape(id as TLShapeId)!
+      return { id: s.id, type: s.type, x: s.x + d.dx, y: s.y + d.dy }
+    })
+    if (updates.length) editor.updateShapes(updates as any)
+  })
+}
 const project = new URLSearchParams(location.search).get('p') ?? 'demo'
 
 /** Snapshot cũ có thể còn ghost (lưu khi đang chờ duyệt): xóa đi khi mở lại. */
@@ -118,9 +173,11 @@ export function App() {
       <div className="lc-canvas">
         <Tldraw
           shapeUtils={shapeUtils}
-          components={{ InFrontOfTheCanvas: Toolbar }}
+          bindingUtils={bindingUtils}
+          components={components}
           onMount={(e) => {
             ;(window as any).editor = e
+            setupWorkflowCanvas(e)
             setEditor(e)
           }}
         />

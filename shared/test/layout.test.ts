@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Graph } from '../src/ir'
-import { layoutNewNodes, NODE_W, overlaps, type Box } from '../src/layout'
+import { layoutNewNodes, NODE_W, overlaps, pushAside, type Box } from '../src/layout'
 
 const n = (id: string, extra = {}) => ({ id, title: id, status: 'draft' as const, ...extra })
 
@@ -51,5 +51,29 @@ describe('layoutNewNodes', () => {
     expect(out.t2.x).toBeGreaterThan(out.t1.x)
     const all = [boxes.n1, out.t1, out.t2, out.t3]
     for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i], all[j])).toBe(false)
+  })
+})
+
+describe('pushAside', () => {
+  it('shifts nodes on the same row right by the growth and nodes below down', () => {
+    const boxes: Record<string, Box> = {
+      b: { x: 320, y: 0, w: 500, h: 120 },
+      c: { x: 640, y: 0, w: 200, h: 56 },
+      d: { x: 960, y: 0, w: 200, h: 56 },
+      under: { x: 340, y: 200, w: 200, h: 56 },
+      left: { x: 0, y: 0, w: 200, h: 56 },
+      far: { x: 2000, y: 600, w: 200, h: 56 },
+    }
+    const shift = pushAside(boxes, 'b', { x: 320, y: 0, w: 200, h: 60 })
+    expect(shift.c).toEqual({ dx: 300, dy: 0 })
+    expect(shift.d).toEqual({ dx: 300, dy: 0 })
+    expect(shift.under).toEqual({ dx: 0, dy: 60 })
+    expect(shift.left).toBeUndefined()
+    expect(shift.far).toBeUndefined()
+  })
+
+  it('does nothing when the box did not grow', () => {
+    const boxes = { b: { x: 0, y: 0, w: 200, h: 56 }, c: { x: 300, y: 0, w: 200, h: 56 } }
+    expect(pushAside(boxes, 'b', { x: 0, y: 0, w: 200, h: 56 })).toEqual({})
   })
 })

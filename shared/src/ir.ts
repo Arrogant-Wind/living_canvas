@@ -11,6 +11,9 @@ export const GraphNodeSchema = z.object({
   parentId: z.string().optional(),
   inputs: z.array(z.string()).optional(),
   outputs: z.array(z.string()).optional(),
+  /** Schema chi tiết (JSON Schema hoặc mô tả tự do), không bắt buộc. */
+  inputSchema: z.string().optional(),
+  outputSchema: z.string().optional(),
   status: z.enum(['draft', 'locked']),
 })
 export type GraphNode = z.infer<typeof GraphNodeSchema>
@@ -55,6 +58,8 @@ export const OpSchema = z.discriminatedUnion('op', [
     after: z.string().optional(),
     inputs: strList.optional(),
     outputs: strList.optional(),
+    inputSchema: z.string().optional(),
+    outputSchema: z.string().optional(),
     description: z.string().optional(),
   }),
   z.object({
@@ -64,6 +69,8 @@ export const OpSchema = z.discriminatedUnion('op', [
     kind: NodeKindSchema.optional(),
     inputs: strList.optional(),
     outputs: strList.optional(),
+    inputSchema: z.string().optional(),
+    outputSchema: z.string().optional(),
     description: z.string().optional(),
   }),
   z.object({ op: z.literal('delete_node'), id: z.string() }),

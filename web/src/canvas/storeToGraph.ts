@@ -48,6 +48,8 @@ export function storeToGraph(records: LooseRecord[], opts: { includeGhosts?: boo
     if (inputs) n.inputs = inputs
     if (outputs) n.outputs = outputs
     if (p.description) n.description = p.description
+    if (p.inputSchema) n.inputSchema = p.inputSchema
+    if (p.outputSchema) n.outputSchema = p.outputSchema
     return n
   })
 

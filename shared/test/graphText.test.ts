@@ -23,6 +23,15 @@ describe('graphToText', () => {
     )
   })
 
+  it('prints schemas on one line so the line format survives', () => {
+    const t = graphToText({
+      nodes: [{ id: 'n1', title: 'A', outputSchema: '{\n  "type": "object"\n}', status: 'draft' }],
+      edges: [],
+      notes: [],
+    })
+    expect(t).toContain('n1 | A | kind=? | out_schema: { "type": "object" }')
+  })
+
   it('marks an empty graph', () => {
     expect(graphToText({ nodes: [], edges: [], notes: [] })).toContain('NODES\n(trống)')
   })

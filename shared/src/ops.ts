@@ -53,6 +53,8 @@ function simulate(g0: Graph, ops: Op[], newId: (tempId: string) => string) {
             ...(parentId && { parentId }),
             ...(op.inputs && { inputs: op.inputs }),
             ...(op.outputs && { outputs: op.outputs }),
+            ...(op.inputSchema && { inputSchema: op.inputSchema }),
+            ...(op.outputSchema && { outputSchema: op.outputSchema }),
             ...(op.description && { description: op.description }),
           })
           break
