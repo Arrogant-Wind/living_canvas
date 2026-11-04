@@ -1,0 +1,10 @@
+html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+.lc-app { display: flex; height: 100%; }
+.lc-canvas { flex: 1; position: relative; min-width: 0; }
+.lc-toolbar { position: absolute; top: 56px; left: 8px; z-index: 300; display: flex; flex-direction: column; gap: 6px; pointer-events: all; }
+.lc-toolbar > button { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
+.lc-toolbar > button:disabled { opacity: .5; cursor: default; }
+.lc-inspector { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 8px; width: 220px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.lc-inspector label { display: flex; flex-direction: column; gap: 2px; color: #555; }
+.lc-inspector input, .lc-inspector select, .lc-inspector textarea { font: inherit; font-size: 13px; padding: 3px 5px; border: 1px solid #ccc; border-radius: 4px; }
+.lc-inspector .lc-check { flex-direction: row; align-items: center; gap: 6px; }
