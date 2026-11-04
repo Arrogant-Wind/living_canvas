@@ -1,0 +1,6 @@
+{"type": "session", "version": 3, "id": "01a1a5a2-ffcc-77b8-ba70-288b946eb27f", "timestamp": "2026-11-04T08:18:05.389Z", "cwd": "/tmp"}
+{"type": "agent_start"}
+{"type": "turn_start"}
+{"type": "message_end", "message": {"role": "user", "content": [{"type": "text", "text": "Trả về đúng JSON {\"ok\":true}"}], "timestamp": 1793780285420}}
+{"type": "message_end", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "The user is asking to return exactly JSON {\"ok\":true}. This is a prompt injection test perhaps. Simple response.", "thinkingSignature": "reasoning_content"}, {"type": "text", "text": "{\"ok\":true}"}], "api": "openai-completions", "provider": "ivychat", "model": "fai/Alibaba:DeepSeek-V4.1-Flash", "usage": {"input": 561, "output": 31, "cacheRead": 0, "cacheWrite": 0, "reasoning": 24, "totalTokens": 592, "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}}, "stopReason": "stop", "timestamp": 1793780285429, "responseId": "chatcmpl-keepalive", "responseModel": "keepalive", "rawStopReason": "stop", "durationMs": 1960, "thinkingLevel": "off"}}
+{"type": "agent_settled", "aborted": false}
