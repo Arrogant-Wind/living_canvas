@@ -75,6 +75,21 @@ describe('API', () => {
     expect((await app.request('/api/projects/Bad_Name/canvas')).status).toBe(400)
   })
 
+  it('rejects non-JSON posts so other sites cannot trigger the model', async () => {
+    let called = false
+    const { app } = setup(async () => {
+      called = true
+      return { reply: '', ops: [], dropped: [] }
+    })
+    const res = await app.request('/api/projects/demo/ask', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ graph, selection: [], message: 'x' }),
+    })
+    expect(res.status).toBe(415)
+    expect(called).toBe(false)
+  })
+
   it('rejects a malformed graph with 400', async () => {
     const { app } = setup(async () => ({ reply: '', ops: [], dropped: [] }))
     const res = await app.request('/api/projects/demo/ask', json({ graph: { nodes: 1 }, message: 'x' }))

@@ -7,6 +7,17 @@ export const NODE_H = 72
 const GAP_X = 140
 const STEP_Y = 40
 const PAD = 20
+const MIN_CHILD_W = 140
+/** Khe ngang giữa hai cột con: đủ chỗ cho nhãn mũi tên ngắn. */
+const CHILD_GAP = 60
+
+/** Kích thước tối thiểu để box cha chứa hết các box con (tọa độ trang). */
+export function containerSizeFor(parent: Box, children: Box[]): { w: number; h: number } {
+  return {
+    w: Math.max(parent.w, ...children.map((c) => c.x + c.w + PAD - parent.x)),
+    h: Math.max(parent.h, ...children.map((c) => c.y + c.h + PAD - parent.y)),
+  }
+}
 
 export const overlaps = (a: Box, b: Box, margin = 10) =>
   a.x < b.x + b.w + margin && b.x < a.x + a.w + margin && a.y < b.y + b.h + margin && b.y < a.y + a.h + margin
@@ -57,8 +68,10 @@ export async function layoutNewNodes(
     if (parentId && placed[parentId]) {
       const p = placed[parentId]
       const i = childCount[parentId] ?? 0
-      const w = Math.min(NODE_W, (p.w - PAD * 3) / 2)
-      box = { x: p.x + PAD + (i % 2) * (w + PAD), y: p.y + 40 + Math.floor(i / 2) * (NODE_H + PAD), w, h: NODE_H }
+      // Cha đủ rộng thì xếp vừa 2 cột bên trong; cha nhỏ (node thường) thì giữ cỡ node và để cha nới ra.
+      const fit = (p.w - PAD * 2 - CHILD_GAP) / 2
+      const w = fit >= MIN_CHILD_W ? Math.min(NODE_W, fit) : NODE_W
+      box = { x: p.x + PAD + (i % 2) * (w + CHILD_GAP), y: p.y + 40 + Math.floor(i / 2) * (NODE_H + PAD), w, h: NODE_H }
       childCount[parentId] = i + 1
     } else {
       const a = anchorOf(id)

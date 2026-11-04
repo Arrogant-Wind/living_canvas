@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Graph } from '../src/ir'
-import { layoutNewNodes, overlaps, type Box } from '../src/layout'
+import { layoutNewNodes, NODE_W, overlaps, type Box } from '../src/layout'
 
 const n = (id: string, extra = {}) => ({ id, title: id, status: 'draft' as const, ...extra })
 
@@ -26,6 +26,16 @@ describe('layoutNewNodes', () => {
       expect(out[id].x + out[id].w).toBeLessThanOrEqual(c1.x + c1.w)
     }
     expect(overlaps(out.t1, out.t2)).toBe(false)
+  })
+
+  it('keeps full node width for children of a small plain parent', async () => {
+    const p: Box = { x: 0, y: 0, w: 200, h: 72 }
+    const g: Graph = { nodes: [n('p'), n('t1', { parentId: 'p' }), n('t2', { parentId: 'p' })], edges: [], notes: [] }
+    const out = await layoutNewNodes(g, { p }, ['t1', 't2'])
+    expect(out.t1.w).toBe(NODE_W)
+    expect(out.t2.w).toBe(NODE_W)
+    expect(overlaps(out.t1, out.t2)).toBe(false)
+    expect(out.t1.x).toBeGreaterThanOrEqual(p.x)
   })
 
   it('chains new nodes left to right and keeps them apart', async () => {

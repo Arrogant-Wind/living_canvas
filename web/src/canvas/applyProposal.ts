@@ -1,4 +1,4 @@
-import { applyOps, layoutNewNodes, NODE_H, NODE_W, overlaps, type Box, type Graph, type Op, type OpError } from '@lc/shared'
+import { applyOps, containerSizeFor, layoutNewNodes, NODE_H, NODE_W, overlaps, type Box, type Graph, type Op, type OpError } from '@lc/shared'
 import { WF_NODE } from './storeToGraph'
 
 /** Phần thuần (không import runtime tldraw) để test được trong node. */
@@ -13,6 +13,8 @@ export interface ProposalItem {
   /** Op áp lên shape có sẵn khi nhận (update/delete/set_parent/...). Rỗng với mục tạo mới. */
   ops: Op[]
   checked: boolean
+  /** Node có sẵn nhận con mới: khi nhận, biến thành khung và nới cho vừa. */
+  fitParent?: ShapeId
 }
 
 export interface ShapeCreate {
@@ -84,9 +86,18 @@ export async function proposalToPartials(
   const items: ProposalItem[] = []
   const itemOf = new Map<string, ProposalItem>()
 
+  // Cha (mới) có con mới thì là khung, đủ lớn để chứa con.
+  const kids = new Map<string, Box[]>()
+  for (const id of newIds) {
+    const p = byId.get(id)!.parentId
+    if (p) kids.set(p, [...(kids.get(p) ?? []), pos(id)])
+  }
+  const newSet = new Set(newIds)
+
   for (const id of newIds) {
     const n = byId.get(id)!
     const b = pos(id)
+    const size = kids.has(id) ? containerSizeFor(b, kids.get(id)!) : { w: b.w, h: b.h }
     const parent = n.parentId ? pos(n.parentId) : undefined
     create.push({
       id: sid(id),
@@ -96,18 +107,19 @@ export async function proposalToPartials(
       y: parent ? b.y - parent.y : b.y,
       ...(n.parentId && { parentId: sid(n.parentId) }),
       props: {
-        w: b.w,
-        h: b.h,
+        w: size.w,
+        h: size.h,
         title: n.title,
         kind: n.kind ?? 'unknown',
         inputs: (n.inputs ?? []).join(', '),
         outputs: (n.outputs ?? []).join(', '),
         description: n.description ?? '',
-        container: false,
+        container: kids.has(id),
       },
       meta: { ghost: proposalId },
     })
     const item: ProposalItem = { key: id, label: `Thêm bước: ${n.title}`, shapeIds: [sid(id)], ops: [], checked: true }
+    if (n.parentId && !newSet.has(n.parentId)) item.fitParent = sid(n.parentId)
     items.push(item)
     itemOf.set(id, item)
   }

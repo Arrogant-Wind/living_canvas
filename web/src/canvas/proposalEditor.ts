@@ -62,7 +62,9 @@ export function acceptProposal(editor: Editor, p: MountedProposal, keys?: string
     const nodes = ghostCreates(p).filter((c) => keepIds.has(c.id) && c.type === WF_NODE)
     const okNode = (id: ShapeId) => !!editor.getShape(id as TLShapeId)
     // Node trước (cha trước con), sau đó mũi tên có đủ hai đầu.
-    const ordered = [...nodes].sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+    const byId = new Map(nodes.map((c) => [c.id, c]))
+    const depth = (c: ShapeCreate): number => (c.parentId && byId.has(c.parentId) ? 1 + depth(byId.get(c.parentId)!) : 0)
+    const ordered = [...nodes].sort((a, b) => depth(a) - depth(b))
     for (const c of ordered) {
       const { ghost: _, ...meta } = c.meta
       if (c.parentId && !okNode(c.parentId)) {
@@ -79,6 +81,8 @@ export function acceptProposal(editor: Editor, p: MountedProposal, keys?: string
     }
     for (const it of chosen)
       for (const op of it.ops) if (!applyExistingOp(editor, op)) skipped.push(it.label)
+    const parents = new Set(chosen.map((it) => it.fitParent).filter((x): x is ShapeId => !!x))
+    for (const id of parents) if (okNode(id)) fitContainer(editor, id as TLShapeId)
   })
   return skipped
 }
@@ -104,6 +108,22 @@ function fitChildInside(editor: Editor, childId: TLShapeId, parentId: TLShapeId)
   } as any)
 }
 
+/** Biến node thành khung và nới cho vừa mọi con (tọa độ con tương đối với cha). */
+function fitContainer(editor: Editor, parentId: TLShapeId) {
+  const parent = editor.getShape(parentId)
+  if (!parent || parent.type !== WF_NODE) return
+  const pp = parent.props as any
+  const PAD = 20
+  let w = pp.w
+  let h = pp.h
+  for (const id of editor.getSortedChildIdsForParent(parentId)) {
+    const c = editor.getShape(id)!
+    w = Math.max(w, c.x + ((c.props as any).w ?? 0) + PAD)
+    h = Math.max(h, c.y + ((c.props as any).h ?? 0) + PAD)
+  }
+  editor.updateShape({ id: parentId, type: WF_NODE, props: { container: true, w, h } } as any)
+}
+
 function applyExistingOp(editor: Editor, op: Op): boolean {
   const get = (id: string) => editor.getShape(`shape:${id}` as TLShapeId)
   switch (op.op) {
@@ -123,6 +143,9 @@ function applyExistingOp(editor: Editor, op: Op): boolean {
     case 'delete_edge': {
       const s = get(op.id)
       if (!s) return false
+      // Giống IR: xóa khung thì giữ con lại (đưa ra trang), không xóa cả nhánh.
+      const children = editor.getSortedChildIdsForParent(s.id)
+      if (children.length) editor.reparentShapes(children, s.parentId)
       editor.deleteShapes([s.id])
       return true
     }

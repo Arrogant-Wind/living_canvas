@@ -6,6 +6,7 @@ import { ProjectStore } from './store'
 
 const app = createApp({ store: new ProjectStore(config.projectsDir), ask: (i) => askAi(i) })
 
-serve({ fetch: app.fetch, port: config.port }, (info) => {
+// Chỉ nghe trên localhost: API đọc/ghi project và gọi model tốn tiền.
+serve({ fetch: app.fetch, port: config.port, hostname: '127.0.0.1' }, (info) => {
   console.log(`Living Canvas server: http://localhost:${info.port} (model ${config.model})`)
 })

@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatMsg } from '../api'
+import type { SaveStatus } from '../autosave'
+
+const SAVE_LABEL: Record<SaveStatus, string> = {
+  saved: 'Đã lưu',
+  pending: 'Chưa lưu…',
+  saving: 'Đang lưu…',
+  error: 'Chưa lưu được, đang thử lại',
+}
 
 export const TAGS = [
   { tag: '/review', hint: 'soát lỗi logic, dữ liệu không khớp' },
@@ -13,8 +21,9 @@ export function ChatPanel(props: {
   selection: { id: string; title: string }[]
   busy: boolean
   onSend: (text: string) => void
+  saveStatus: SaveStatus
 }) {
-  const { messages, selection, busy, onSend } = props
+  const { messages, selection, busy, onSend, saveStatus } = props
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -30,7 +39,10 @@ export function ChatPanel(props: {
 
   return (
     <aside className="lc-chat">
-      <div className="lc-chat-head">Chat với AI</div>
+      <div className="lc-chat-head">
+        Chat với AI
+        <span className={`lc-save lc-save-${saveStatus}`}>{SAVE_LABEL[saveStatus]}</span>
+      </div>
       <div className="lc-chat-list" ref={listRef}>
         {messages.length === 0 && (
           <div className="lc-chat-empty">

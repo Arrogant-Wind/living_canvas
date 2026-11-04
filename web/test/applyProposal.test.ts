@@ -61,6 +61,32 @@ describe('proposalToPartials', () => {
     expect(Math.abs(notes[0].x - notes[1].x)).toBeGreaterThanOrEqual(NOTE_W)
   })
 
+  it('turns a new parent into a container big enough for its new children', async () => {
+    const r = await proposalToPartials(
+      graph,
+      boxes,
+      [
+        { op: 'add_node', tempId: 'c', title: 'Chuẩn hóa' },
+        { op: 'add_node', tempId: 'k1', title: 'Nhân vật', parent: 'c' },
+        { op: 'add_node', tempId: 'k2', title: 'Bối cảnh', parent: 'c' },
+      ],
+      'p5',
+    )
+    const parent = r.create.find((s) => s.props.title === 'Chuẩn hóa')!
+    expect(parent.props.container).toBe(true)
+    for (const t of ['Nhân vật', 'Bối cảnh']) {
+      const k = r.create.find((s) => s.props.title === t)!
+      expect(k.parentId).toBe(parent.id)
+      expect(k.x + (k.props.w as number)).toBeLessThanOrEqual(parent.props.w as number)
+      expect(k.y + (k.props.h as number)).toBeLessThanOrEqual(parent.props.h as number)
+    }
+  })
+
+  it('marks an existing plain parent to be fitted as a container on accept', async () => {
+    const r = await proposalToPartials(graph, boxes, [{ op: 'add_node', tempId: 'k', title: 'Gọi API', parent: 'n2' }], 'p6')
+    expect(r.items[0].fitParent).toBe('shape:n2')
+  })
+
   it('reports ops that reference missing nodes', async () => {
     const r = await proposalToPartials(graph, boxes, [{ op: 'delete_node', id: 'gone' }], 'p3')
     expect(r.errors).toHaveLength(1)

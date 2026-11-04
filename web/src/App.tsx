@@ -2,6 +2,7 @@ import type { Graph } from '@lc/shared'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Tldraw, useValue, type Editor } from 'tldraw'
 import { api, type ChatMsg } from './api'
+import { createAutosaver, type SaveStatus } from './autosave'
 import { graphId, WF_NODE } from './canvas/storeToGraph'
 import { WfNodeShapeUtil } from './canvas/WfNodeShape'
 import { currentGraph, useProposal } from './proposal/useProposal'
@@ -29,33 +30,43 @@ export function App() {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [busy, setBusy] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('pending')
   const prevGraph = useRef<Graph | undefined>(undefined)
   const { proposal, propose, accept, reject } = useProposal(editor)
 
-  // Tải project, rồi tự lưu (debounce 800ms) mỗi khi tài liệu đổi.
+  // Tải project, rồi tự lưu (debounce 800ms, thử lại mỗi 5s khi lỗi, lưu ngay khi đóng tab).
   useEffect(() => {
     if (!editor) return
-    let timer: ReturnType<typeof setTimeout> | undefined
     let stop: (() => void) | undefined
     let alive = true
+    const saver = createAutosaver({
+      save: (doc: unknown) => api.saveCanvas(project, doc),
+      delayMs: 800,
+      retryMs: 5000,
+      onStatus: setSaveStatus,
+    })
+    const flush = () => saver.flush()
     ;(async () => {
       const [{ snapshot }, { messages }] = await Promise.all([api.loadCanvas(project), api.loadChat(project)])
       if (!alive) return
       if (snapshot) editor.loadSnapshot({ document: snapshot as any })
       stripGhosts(editor)
       setMessages(messages)
-      stop = editor.store.listen(
-        () => {
-          clearTimeout(timer)
-          timer = setTimeout(() => api.saveCanvas(project, editor.getSnapshot().document).catch(console.error), 800)
-        },
-        { scope: 'document' },
-      )
-    })().catch((e) => setMessages([{ role: 'error', text: `Không tải được project: ${e.message}` }]))
+      setSaveStatus('saved')
+      stop = editor.store.listen(() => saver.schedule(() => editor.getSnapshot().document), { scope: 'document' })
+      window.addEventListener('pagehide', flush)
+    })().catch((e) => {
+      // Không tải được thì khóa canvas: lưu lúc này sẽ ghi đè dữ liệu thật bằng canvas trống.
+      editor.updateInstanceState({ isReadonly: true })
+      setSaveStatus('error')
+      setMessages([{ role: 'error', text: `Không tải được project (${e.message}). Canvas đang khóa, tải lại trang để thử lại.` }])
+    })
     return () => {
       alive = false
       stop?.()
-      clearTimeout(timer)
+      saver.flush()
+      saver.dispose()
+      window.removeEventListener('pagehide', flush)
     }
   }, [editor])
 
@@ -115,7 +126,7 @@ export function App() {
         />
         {proposal && <ProposalBar key={proposal.id} proposal={proposal} onAccept={onAccept} onReject={reject} />}
       </div>
-      <ChatPanel messages={messages} selection={selection} busy={busy} onSend={send} />
+      <ChatPanel messages={messages} selection={selection} busy={busy} onSend={send} saveStatus={saveStatus} />
     </div>
   )
 }

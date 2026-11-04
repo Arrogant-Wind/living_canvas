@@ -22,8 +22,16 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   loadCanvas: (p: string) => call<{ snapshot: unknown | null }>(`${base(p)}/canvas`),
-  saveCanvas: (p: string, snapshot: unknown) =>
-    call(`${base(p)}/canvas`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ snapshot }) }),
+  saveCanvas: (p: string, snapshot: unknown) => {
+    const body = JSON.stringify({ snapshot })
+    return call(`${base(p)}/canvas`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body,
+      // keepalive giúp lần lưu lúc đóng tab vẫn tới server, nhưng trình duyệt giới hạn body 64KB.
+      keepalive: body.length < 60_000,
+    })
+  },
   loadChat: (p: string) => call<{ messages: ChatMsg[] }>(`${base(p)}/chat`),
   ask: (p: string, body: { graph: Graph; prevGraph?: Graph; selection: string[]; message: string }) =>
     call<AskResult>(`${base(p)}/ask`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),

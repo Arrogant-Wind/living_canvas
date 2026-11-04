@@ -25,6 +25,9 @@ export function createApp(deps: { store: ProjectStore; ask: (i: AskInput) => Pro
 
   app.use('/api/projects/:name/*', async (c, next) => {
     if (!PROJECT_NAME.test(c.req.param('name'))) return c.json({ error: 'Tên project không hợp lệ' }, 400)
+    // Trang web khác gửi được POST "simple" (text/plain) không cần preflight: chỉ nhận JSON.
+    if (c.req.method !== 'GET' && !(c.req.header('content-type') ?? '').startsWith('application/json'))
+      return c.json({ error: 'Chỉ nhận application/json' }, 415)
     await next()
   })
 

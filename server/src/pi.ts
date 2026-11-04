@@ -51,6 +51,9 @@ export const nodeSpawner: Spawner = (bin, args, { timeoutMs }) =>
       timedOut = true
       child.kill('SIGKILL')
     }, timeoutMs)
+    // Giải mã theo luồng: ký tự UTF-8 nhiều byte có thể bị cắt giữa hai chunk.
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
     child.stdout.on('data', (d) => (stdout += d))
     child.stderr.on('data', (d) => (stderr += d))
     child.on('error', (e: NodeJS.ErrnoException) => {

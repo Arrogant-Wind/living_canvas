@@ -35,3 +35,6 @@ html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif;
 .lc-tags { display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
 .lc-tags button { font: inherit; text-align: left; padding: 5px 8px; border: 0; border-bottom: 1px solid #eee; background: #fafafa; cursor: pointer; }
 .lc-tags button:hover { background: #f3eeff; }
+.lc-chat-head { display: flex; justify-content: space-between; align-items: center; }
+.lc-save { font-weight: 400; font-size: 11px; color: #888; }
+.lc-save-error { color: #c62828; font-weight: 600; }

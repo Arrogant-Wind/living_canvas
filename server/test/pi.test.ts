@@ -50,3 +50,13 @@ describe('runPi', () => {
     if (kind === 'exit') expect(err.message).toContain('boom')
   })
 })
+
+describe('nodeSpawner', () => {
+  it('keeps multi-byte UTF-8 intact when a character is split across chunks', async () => {
+    const { nodeSpawner } = await import('../src/pi')
+    // "ẩ" = e1 ba a9: gửi byte đầu ở chunk 1, hai byte sau ở chunk 2.
+    const script = "process.stdout.write(Buffer.from([0x43,0x68,0xe1]));setTimeout(()=>process.stdout.write(Buffer.from([0xba,0xa9,0x6e])),50)"
+    const r = await nodeSpawner(process.execPath, ['-e', script], { timeoutMs: 5000 })
+    expect(r.stdout).toBe('Chẩn')
+  })
+})
