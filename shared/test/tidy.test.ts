@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Graph } from '../src/ir'
 import { overlaps, type Box } from '../src/layout'
-import { findClutter, tidy, tidyLayout } from '../src/tidy'
+import { elkTidy } from '../src/elkLayout'
+import { findClutter } from '../src/tidy'
+
+const tidy = async (...a: Parameters<typeof elkTidy>) => (await elkTidy(...a)).boxes
+const tidyLayout = elkTidy
 
 const n = (id: string, extra = {}) => ({ id, title: id, status: 'draft' as const, ...extra })
 const e = (from: string, to: string) => ({ id: `${from}-${to}`, from, to, type: 'flow' as const })
@@ -11,74 +15,81 @@ const noOverlap = (bs: Box[]) => {
 }
 
 describe('tidy', () => {
-  it('lays a chain out left to right without overlaps', () => {
+  it('lays a chain out left to right without overlaps', async () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('b', 'c')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(50, 10), c: box(60, 20) }, null)
+    const out = await tidy(g, { a: box(0, 0), b: box(50, 10), c: box(60, 20) }, null)
     expect(out.a.x).toBeLessThan(out.b.x)
     expect(out.b.x).toBeLessThan(out.c.x)
     expect(out.b.x - (out.a.x + out.a.w)).toBeGreaterThanOrEqual(100)
     noOverlap([out.a, out.b, out.c])
   })
 
-  it('puts branches of one source in the same column', () => {
+  it('puts branches of one source in the same column', async () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null)
+    const out = await tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null)
     expect(out.b.x).toBe(out.c.x)
     noOverlap([out.a, out.b, out.c])
   })
 
-  it('arranges only the children of a frame, inside the frame under its header', () => {
+  it('arranges only the children of a frame, inside the frame under its header', async () => {
     const g: Graph = {
       nodes: [n('f'), n('k1', { parentId: 'f' }), n('k2', { parentId: 'f' }), n('out')],
       edges: [e('k1', 'k2')],
       notes: [],
     }
     const boxes = { f: box(100, 100, 300, 200), k1: box(120, 150), k2: box(130, 160), out: box(900, 0) }
-    const out = tidy(g, boxes, 'f', { headerH: 40 })
-    expect(Object.keys(out).sort()).toEqual(['k1', 'k2'])
+    const out = await tidy(g, boxes, 'f', { headerH: { f: 40 } })
+    // Kết quả gồm các ô con và kích thước mới của chính khung.
+    expect(Object.keys(out).sort()).toEqual(['f', 'k1', 'k2'])
+    expect(out.f.x).toBe(100)
+    expect(out.f.y).toBe(100)
     for (const k of ['k1', 'k2']) {
       expect(out[k].x).toBeGreaterThanOrEqual(120)
       expect(out[k].y).toBeGreaterThanOrEqual(140)
     }
     noOverlap([out.k1, out.k2])
+    for (const k of ['k1', 'k2']) {
+      expect(out[k].x + out[k].w).toBeLessThanOrEqual(out.f.x + out.f.w)
+      expect(out[k].y + out[k].h).toBeLessThanOrEqual(out.f.y + out.f.h)
+    }
   })
 
-  it('treats an edge into a frame child as an edge into the frame', () => {
+  it('treats an edge into a frame child as an edge into the frame', async () => {
     const g: Graph = {
       nodes: [n('a'), n('f'), n('k', { parentId: 'f' })],
       edges: [e('a', 'k')],
       notes: [],
     }
-    const out = tidy(g, { a: box(500, 0), f: box(0, 0, 300, 150), k: box(20, 40) }, null)
+    const out = await tidy(g, { a: box(500, 0), f: box(0, 0, 300, 150), k: box(20, 40) }, null)
     expect(out.a.x).toBeLessThan(out.f.x)
   })
 
-  it('terminates on cycles', () => {
+  it('terminates on cycles', async () => {
     const g: Graph = { nodes: [n('a'), n('b')], edges: [e('a', 'b'), e('b', 'a')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(0, 0) }, null)
+    const out = await tidy(g, { a: box(0, 0), b: box(0, 0) }, null)
     noOverlap([out.a, out.b])
   })
 
-  it('keeps unconnected nodes clear of the flow', () => {
+  it('keeps unconnected nodes clear of the flow', async () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('x')], edges: [e('a', 'b')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(0, 0), x: box(0, 0) }, null)
+    const out = await tidy(g, { a: box(0, 0), b: box(0, 0), x: box(0, 0) }, null)
     noOverlap([out.a, out.b, out.x])
   })
 })
 
 describe('findClutter', () => {
-  it('reports overlapping siblings with their scope', () => {
+  it('reports overlapping siblings with their scope', async () => {
     const g: Graph = { nodes: [n('f'), n('k1', { parentId: 'f' }), n('k2', { parentId: 'f' }), n('a')], edges: [], notes: [] }
     const issues = findClutter(g, { f: box(0, 0, 400, 200), k1: box(20, 40), k2: box(100, 60), a: box(600, 0) })
     expect(issues).toEqual([{ scope: 'f', kind: 'overlap', ids: ['k1', 'k2'] }])
   })
 
-  it('does not report a child sitting inside its own frame', () => {
+  it('does not report a child sitting inside its own frame', async () => {
     const g: Graph = { nodes: [n('f'), n('k', { parentId: 'f' })], edges: [], notes: [] }
     expect(findClutter(g, { f: box(0, 0, 400, 200), k: box(20, 40) })).toEqual([])
   })
 
-  it('reports an arrow that passes through another node', () => {
+  it('reports an arrow that passes through another node', async () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'c')], notes: [] }
     const issues = findClutter(g, { a: box(0, 0), b: box(300, 0), c: box(600, 0) })
     expect(issues).toEqual([{ scope: null, kind: 'arrow-through', ids: ['a-c', 'b'] }])
@@ -89,37 +100,37 @@ describe('findClutter with arrow labels and notes', () => {
   const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
   const boxes = { a: box(0, 0), b: box(400, -100), c: box(400, 100) }
 
-  it('reports two arrow labels that overlap', () => {
+  it('reports two arrow labels that overlap', async () => {
     const labels = { 'a-b': box(250, 0, 80, 60), 'a-c': box(260, 30, 80, 60) }
     expect(findClutter(g, boxes, { labels })).toContainEqual({ scope: null, kind: 'label-overlap', ids: ['a-b', 'a-c'] })
   })
 
-  it('reports a label covering a node that is not one of its ends', () => {
+  it('reports a label covering a node that is not one of its ends', async () => {
     const labels = { 'a-b': box(390, 110, 60, 20) }
     expect(findClutter(g, boxes, { labels })).toContainEqual({ scope: null, kind: 'label-overlap', ids: ['a-b', 'c'] })
   })
 
-  it('reports a note covering a node', () => {
+  it('reports a note covering a node', async () => {
     const notes = { n1: box(380, -120, 200, 200) }
     expect(findClutter(g, boxes, { notes })).toContainEqual({ scope: null, kind: 'note-overlap', ids: ['n1', 'b'] })
   })
 
-  it('stays quiet when labels sit in free space', () => {
+  it('stays quiet when labels sit in free space', async () => {
     const labels = { 'a-b': box(250, -60, 80, 20), 'a-c': box(250, 80, 80, 20) }
     expect(findClutter(g, boxes, { labels })).toEqual([])
   })
 })
 
 describe('tidy with arrow labels', () => {
-  it('widens a column gap to fit the longest label leaving that column', () => {
+  it('widens a column gap to fit the longest label leaving that column', async () => {
     const g: Graph = { nodes: [n('a'), n('b')], edges: [e('a', 'b')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(0, 0) }, null, { labelW: { 'a-b': 300 } })
+    const out = await tidy(g, { a: box(0, 0), b: box(0, 0) }, null, { labelW: { 'a-b': 300 } })
     expect(out.b.x - (out.a.x + out.a.w)).toBeGreaterThanOrEqual(340)
   })
 })
 
 describe('tidy wrapping with a branching last column', () => {
-  it('does not route the row change through a sibling in the same column', () => {
+  it('does not route the row change through a sibling in the same column', async () => {
     // a → b → c → {d1, d2} → e → f → g → h : cột của d1/d2 là cột cuối hàng đầu.
     const ids = ['a', 'b', 'c', 'd1', 'd2', 'e', 'f', 'g', 'h']
     const g: Graph = {
@@ -128,14 +139,14 @@ describe('tidy wrapping with a branching last column', () => {
       notes: [],
     }
     const boxes = Object.fromEntries(ids.map((id) => [id, box(0, 0)]))
-    const out = tidy(g, boxes, null, { aspect: 16 / 9 })
+    const out = await tidy(g, boxes, null, { aspect: 16 / 9 })
     const issues = findClutter(g, out).filter((i) => i.kind === 'arrow-through')
     expect(issues).toEqual([])
   })
 })
 
 describe('tidy wrapping with a wide last column', () => {
-  it('keeps the next row clear of the arrows coming down from a wide column', () => {
+  it('keeps the next row clear of the arrows coming down from a wide column', async () => {
     // c là khung rộng, d nhỏ ở cùng cột; cả hai đi xuống e (cột quay đầu), rồi e → f → g.
     const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     const g: Graph = {
@@ -144,15 +155,15 @@ describe('tidy wrapping with a wide last column', () => {
       notes: [],
     }
     const boxes = Object.fromEntries(ids.map((id) => [id, id === 'c' ? box(0, 0, 480, 116) : box(0, 0)]))
-    const out = tidy(g, boxes, null, { aspect: 16 / 9, labelW: { 'c-e': 260, 'd-e': 120, 'e-f': 160 } })
+    const out = await tidy(g, boxes, null, { aspect: 16 / 9, labelW: { 'c-e': 260, 'd-e': 120, 'e-f': 160 } })
     expect(findClutter(g, out).filter((i) => i.kind === 'arrow-through')).toEqual([])
   })
 })
 
 describe('tidy spacing for labelled branches', () => {
-  it('spreads branch targets further apart when their incoming arrows carry labels', () => {
+  it('spreads branch targets further apart when their incoming arrows carry labels', async () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
-    const out = tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null, { labelW: { 'a-b': 150, 'a-c': 200 } })
+    const out = await tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null, { labelW: { 'a-b': 150, 'a-c': 200 } })
     const [top, bottom] = [out.b, out.c].sort((p, q) => p.y - q.y)
     expect(bottom.y - (top.y + top.h)).toBeGreaterThanOrEqual(80)
   })
@@ -166,13 +177,13 @@ describe('tidy wrapping', () => {
   })
   const zero = (k: number) => Object.fromEntries(Array.from({ length: k }, (_, i) => [`s${i}`, box(0, 0)]))
 
-  it('keeps a long chain on one row when no aspect is given', () => {
-    const out = tidy(chain(8), zero(8), null)
+  it('keeps a long chain on one row when no aspect is given', async () => {
+    const out = await tidy(chain(8), zero(8), null)
     expect(new Set(Object.values(out).map((b) => b.y)).size).toBe(1)
   })
 
-  it('wraps a long chain into zigzag rows so the step between rows is short', () => {
-    const out = tidy(chain(8), zero(8), null, { aspect: 16 / 9 })
+  it('wraps a long chain into zigzag rows so the step between rows is short', async () => {
+    const out = await tidy(chain(8), zero(8), null, { aspect: 16 / 9 })
     const ids = Array.from({ length: 8 }, (_, i) => `s${i}`)
     const rowYs = [...new Set(ids.map((id) => out[id].y))].sort((a, b) => a - b)
     expect(rowYs.length).toBeGreaterThan(1)
@@ -195,16 +206,16 @@ describe('tidy wrapping', () => {
     expect(w / h).toBeLessThan(10)
   })
 
-  it('reports which row each node landed in', () => {
-    const { boxes, band } = tidyLayout(chain(8), zero(8), null, { aspect: 16 / 9 })
+  it('reports which row each node landed in', async () => {
+    const { boxes, band } = await tidyLayout(chain(8), zero(8), null, { aspect: 16 / 9 })
     const ids = Array.from({ length: 8 }, (_, i) => `s${i}`)
     expect(band.s0).toBe(0)
     expect(band.s7).toBeGreaterThan(0)
     for (const id of ids) expect(boxes[id].y > boxes.s0.y).toBe(band[id] > 0)
   })
 
-  it('does not wrap a short chain', () => {
-    const out = tidy(chain(3), zero(3), null, { aspect: 16 / 9 })
+  it('does not wrap a short chain', async () => {
+    const out = await tidy(chain(3), zero(3), null, { aspect: 16 / 9 })
     expect(new Set(Object.values(out).map((b) => b.y)).size).toBe(1)
   })
 })

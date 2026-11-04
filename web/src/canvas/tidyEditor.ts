@@ -1,11 +1,10 @@
-import { overlaps, tidyLayout, type Box } from '@lc/shared'
+import { elkTidy, overlaps, type Box } from '@lc/shared'
 import type { Editor, TLShapeId } from 'tldraw'
 import { graphId, WF_NODE } from './storeToGraph'
-import { frameContentTop, type WfNodeShape } from './WfNodeShape'
+import { frameContentTop, frameTitleWidth, type WfNodeShape } from './WfNodeShape'
 import { currentGraph } from '../proposal/useProposal'
 
 const sid = (id: string) => `shape:${id}` as TLShapeId
-const FRAME_PAD = 20
 const FRAME_ASPECT = 2.5
 
 function viewportAspect(editor: Editor) {
@@ -79,34 +78,25 @@ export interface TidyPreview {
   label: string
 }
 
-/** Xếp lại một phạm vi (không đệ quy). Trả về độ dịch của từng ô đã xếp. */
-function tidyOne(editor: Editor, scope: string | null): Map<string, { dx: number; dy: number }> {
-  const boxes = pageBoxes(editor)
-  const frame = scope ? (editor.getShape(sid(scope)) as WfNodeShape | undefined) : undefined
-  const { boxes: target, band } = tidyLayout(currentGraph(editor), boxes, scope, {
-    headerH: frame ? frameContentTop(editor, frame) : undefined,
-    gapX: scope ? 80 : 120,
-    labelW: labelWidths(editor),
-    // Luồng dài thì xuống hàng: cả trang theo tỉ lệ khung nhìn, trong khung thì dẹt hơn một chút.
-    aspect: scope ? FRAME_ASPECT : viewportAspect(editor),
-  })
-  const moved = new Map<string, { dx: number; dy: number }>()
+/** Cờ cho handler "đẩy ô bên cạnh" biết đang áp bố cục ELK (ELK đã chừa chỗ, không đẩy nữa). */
+export let isApplyingLayout = false
+
+/** Áp box (tọa độ trang) do ELK tính: vị trí trước (theo cha mới), kích thước khung sau. */
+function applyLayout(editor: Editor, target: Record<string, Box>) {
+  const pageOf = (id: TLShapeId): { x: number; y: number } => {
+    const g = graphId(id)
+    return target[g] ?? editor.getShapePageBounds(id)!
+  }
   for (const [id, b] of Object.entries(target)) {
-    const s = editor.getShape(sid(id))!
-    const parentBox = s.parentId === editor.getCurrentPageId() ? { x: 0, y: 0 } : editor.getShapePageBounds(s.parentId as TLShapeId)!
-    moved.set(id, { dx: b.x - boxes[id].x, dy: b.y - boxes[id].y })
-    editor.updateShape({ id: s.id, type: s.type, x: b.x - parentBox.x, y: b.y - parentBox.y } as any)
+    const s = editor.getShape(sid(id))
+    if (!s) continue
+    const p = s.parentId === editor.getCurrentPageId() ? { x: 0, y: 0 } : pageOf(s.parentId as TLShapeId)
+    editor.updateShape({ id: s.id, type: s.type, x: b.x - p.x, y: b.y - p.y } as any)
   }
-  // Khung được xếp lại thì co/giãn vừa khít phần chứa mới.
-  if (frame && Object.keys(target).length) {
-    const fb = editor.getShapePageBounds(frame.id)!
-    const kids = Object.values(target)
-    const w = Math.max(...kids.map((k) => k.x + k.w)) - fb.x + FRAME_PAD
-    const h = Math.max(...kids.map((k) => k.y + k.h)) - fb.y + FRAME_PAD
-    editor.updateShape({ id: frame.id, type: WF_NODE, props: { w, h } } as any)
+  for (const [id, b] of Object.entries(target)) {
+    const s = editor.getShape(sid(id))
+    if (s?.type === WF_NODE && (s.props as any).container) editor.updateShape({ id: s.id, type: WF_NODE, props: { w: b.w, h: b.h } } as any)
   }
-  setRowChangeAnchors(editor, band)
-  return moved
 }
 
 /** Ô thành viên (theo `band`) chứa ô `id`, hoặc chính nó. */
@@ -182,34 +172,49 @@ function placePinnedNotes(editor: Editor) {
   }
 }
 
-/** Các khung con (đệ quy) của `scope`, khung sâu nhất trước. */
-function framesInside(editor: Editor, scope: string | null): string[] {
-  const out: string[] = []
-  const walk = (parent: TLShapeId | string) => {
-    for (const id of editor.getSortedChildIdsForParent(parent as TLShapeId)) {
-      const s = editor.getShape(id)
-      if (s?.type !== WF_NODE || s.meta.ghost || !(s.props as any).container) continue
-      walk(s.id)
-      out.push(graphId(s.id))
-    }
+/**
+ * Với mọi khung: bề rộng tối thiểu để tiêu đề nằm trên một dòng, và chiều cao tiêu đề ở bề rộng
+ * đó (ô con bắt đầu bên dưới phần này).
+ */
+function frameHeaders(editor: Editor): { headerH: Record<string, number>; minW: Record<string, number> } {
+  const headerH: Record<string, number> = {}
+  const minW: Record<string, number> = {}
+  for (const s of editor.getCurrentPageShapes()) {
+    if (s.type !== WF_NODE || !(s.props as any).container) continue
+    const f = s as WfNodeShape
+    const w = frameTitleWidth(editor, f.props.title)
+    minW[graphId(s.id)] = w
+    headerH[graphId(s.id)] = frameContentTop(editor, { ...f, props: { ...f.props, w } })
   }
-  walk(scope ? sid(scope) : editor.getCurrentPageId())
-  return out
+  return { headerH, minW }
 }
 
 /**
- * Sắp xếp lại `scope` ngay trên canvas sau một mốc lịch sử, để Bỏ = quay về mốc,
- * Giữ = để nguyên (cả lần sắp xếp là một mục undo). Xếp từ khung trong cùng ra ngoài,
- * vì kích thước khung trong quyết định chỗ của nó ở tầng ngoài.
+ * Sắp xếp lại `scope` bằng ELK. Tính bố cục trước (bất đồng bộ), rồi áp lên canvas sau một mốc
+ * lịch sử, để Hoàn tác = quay về mốc, Giữ = để nguyên (cả lần sắp xếp là một mục undo).
  */
-export function startTidy(editor: Editor, scope: string | null): TidyPreview | null {
+export async function startTidy(editor: Editor, scope: string | null): Promise<TidyPreview | null> {
+  const { boxes: target, band } = await elkTidy(currentGraph(editor), pageBoxes(editor), scope, {
+    ...frameHeaders(editor),
+    gapX: scope ? 80 : 120,
+    labelW: labelWidths(editor),
+    // Luồng dài thì xuống hàng: cả trang theo tỉ lệ khung nhìn, trong khung thì dẹt hơn một chút.
+    aspect: scope ? FRAME_ASPECT : viewportAspect(editor),
+  })
+  if (!Object.keys(target).length) return null
+
   const before = layoutSignature(editor)
   const markId = editor.markHistoryStoppingPoint('tidy')
-  editor.run(() => {
-    for (const f of framesInside(editor, scope)) tidyOne(editor, f)
-    tidyOne(editor, scope)
-    if (!scope) placePinnedNotes(editor)
-  })
+  isApplyingLayout = true
+  try {
+    editor.run(() => {
+      applyLayout(editor, target)
+      setRowChangeAnchors(editor, band)
+      if (!scope) placePinnedNotes(editor)
+    })
+  } finally {
+    isApplyingLayout = false
+  }
   if (layoutSignature(editor) === before) {
     editor.bailToMark(markId)
     return null

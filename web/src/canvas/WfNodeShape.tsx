@@ -140,6 +140,12 @@ export class WfNodeShapeUtil extends BaseFrameLikeShapeUtil<WfNodeShape> {
   }
 }
 
+/** Bề rộng để tiêu đề khung nằm trên một dòng (kèm nhãn kind), tối đa 520px. */
+export function frameTitleWidth(editor: Editor, title: string): number {
+  const m = editor.textMeasure.measureText(title || ' ', { ...TITLE, fontStyle: 'normal', maxWidth: null, padding: '0px' })
+  return Math.min(520, Math.ceil(m.w) + PAD_X * 2 + 52)
+}
+
 /** Vị trí đầu tiên cho ô con trong khung: ngay dưới tiêu đề của khung. */
 export function frameContentTop(editor: Editor, frame: WfNodeShape) {
   return titleHeight(editor, frame.props.title, frame.props.w) + PAD_Y * 2
