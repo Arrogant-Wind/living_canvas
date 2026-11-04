@@ -12,6 +12,10 @@ const PAD = 20
 const GAP_Y = 40
 /** Khe dọc khi các ô trong cột nhận mũi tên có nhãn: đủ chỗ cho hai nhãn không đè nhau. */
 const GAP_Y_LABELLED = 88
+/** Xuống hàng: khoảng cách giữa hai hàng, số cột tối thiểu mỗi hàng, bề rộng tối thiểu mới xuống hàng. */
+const BAND_GAP = 120
+const MIN_COLS_PER_ROW = 3
+const MIN_WRAP_W = 1400
 const ISO_PER_ROW = 3
 /** Khoảng trống hai bên nhãn mũi tên trong khe giữa hai cột. */
 const LABEL_PAD = 20
@@ -57,6 +61,36 @@ function segmentHitsBox(p: { x: number; y: number }, q: { x: number; y: number }
  * `extras.labels`: box nhãn của từng mũi tên (theo edge id); `extras.notes`: box của note.
  * Cả hai đều ở tọa độ trang, do canvas đo (model không biết chữ hiển thị to cỡ nào).
  */
+type Pt = { x: number; y: number }
+
+/**
+ * Đường đi xấp xỉ của mũi tên gấp khúc (elbow) từ a tới b: ra cạnh gần, đi ngang (hoặc dọc)
+ * tới giữa khe, rẽ, rồi vào cạnh đối diện của b. Đủ để biết mũi tên có cắt qua ô khác không.
+ */
+function elbowPath(a: Box, b: Box): [Pt, Pt][] {
+  const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 }
+  const bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+  const gapX = b.x > a.x + a.w ? b.x - (a.x + a.w) : a.x > b.x + b.w ? a.x - (b.x + b.w) : -1
+  if (gapX >= 0) {
+    const xm = b.x > a.x ? (a.x + a.w + b.x) / 2 : (b.x + b.w + a.x) / 2
+    const p0 = { x: b.x > a.x ? a.x + a.w : a.x, y: ac.y }
+    const p3 = { x: b.x > a.x ? b.x : b.x + b.w, y: bc.y }
+    return [
+      [p0, { x: xm, y: ac.y }],
+      [{ x: xm, y: ac.y }, { x: xm, y: bc.y }],
+      [{ x: xm, y: bc.y }, p3],
+    ]
+  }
+  const ym = b.y > a.y ? (a.y + a.h + b.y) / 2 : (b.y + b.h + a.y) / 2
+  const p0 = { x: ac.x, y: b.y > a.y ? a.y + a.h : a.y }
+  const p3 = { x: bc.x, y: b.y > a.y ? b.y : b.y + b.h }
+  return [
+    [p0, { x: ac.x, y: ym }],
+    [{ x: ac.x, y: ym }, { x: bc.x, y: ym }],
+    [{ x: bc.x, y: ym }, p3],
+  ]
+}
+
 export function findClutter(
   g: Graph,
   boxes: Record<string, Box>,
@@ -79,15 +113,15 @@ export function findClutter(
     for (let p = parent(id); p && !xs.has(p); p = parent(p)) xs.add(p)
     return xs
   }
-  const center = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 })
   for (const e of g.edges) {
     const a = boxes[e.from]
     const b = boxes[e.to]
     if (!a || !b) continue
+    const path = elbowPath(a, b)
     const skip = new Set([e.from, e.to, ...ancestors(e.from), ...ancestors(e.to)])
     for (const n of nodes) {
       if (skip.has(n.id) || ancestors(n.id).has(e.from) || ancestors(n.id).has(e.to)) continue
-      if (segmentHitsBox(center(a), center(b), boxes[n.id])) {
+      if (path.some(([p, q]) => segmentHitsBox(p, q, boxes[n.id]))) {
         out.push({ scope: parent(n.id), kind: 'arrow-through', ids: [e.id, n.id] })
       }
     }
@@ -131,16 +165,28 @@ export function findClutter(
  * trung bình vị trí của ô đứng trước (ít mũi tên cắt nhau). Ô không nối gì xếp lưới phía dưới.
  * Kích thước ô giữ nguyên. Trả về box mới (tọa độ trang) chỉ cho các thành viên.
  */
-export function tidy(
+export function tidy(...args: Parameters<typeof tidyLayout>): Record<string, Box> {
+  return tidyLayout(...args).boxes
+}
+
+/** Như `tidy`, kèm `band`: ô nằm ở hàng thứ mấy sau khi xuống dòng (ô không nối gì: -1). */
+export function tidyLayout(
   g: Graph,
   boxes: Record<string, Box>,
   scope: string | null,
-  opts: { headerH?: number; gapX?: number; labelW?: Record<string, number> } = {},
-): Record<string, Box> {
+  opts: {
+    headerH?: number
+    gapX?: number
+    labelW?: Record<string, number>
+    /** Tỉ lệ rộng/cao mong muốn. Có thì luồng dài được xuống hàng (như đọc chữ) cho gần tỉ lệ này. */
+    aspect?: number
+  } = {},
+): { boxes: Record<string, Box>; band: Record<string, number> } {
   const parent = parentOf(g)
   const gapX = opts.gapX ?? 120
+  const bandOf: Record<string, number> = {}
   const members = g.nodes.map((n) => n.id).filter((id) => boxes[id] && parent(id) === scope)
-  if (!members.length) return {}
+  if (!members.length) return { boxes: {}, band: bandOf }
   const isMember = new Set(members)
   const rep = (id: string): string | null => {
     for (let cur: string | null = id; cur; cur = parent(cur)) if (isMember.has(cur)) return cur
@@ -211,19 +257,83 @@ export function tidy(
     col.forEach((m, i) => index.set(m, i))
   })
   const gapY = (col: string[]) => (col.some((m) => labelledIn.has(m)) ? GAP_Y_LABELLED : GAP_Y)
-  const colH = cols.map((col) => (col ?? []).reduce((s, m) => s + boxes[m].h, 0) + gapY(col ?? []) * Math.max(0, (col ?? []).length - 1))
-  const maxH = Math.max(0, ...colH)
-  let x = ox
-  cols.forEach((col, r) => {
-    if (!col?.length) return
-    let y = oy + (maxH - colH[r]) / 2
-    for (const m of col) {
-      out[m] = { ...boxes[m], x, y }
-      y += boxes[m].h + gapY(col)
+  const ranks = cols.map((c, r) => r).filter((r) => cols[r]?.length)
+  const colW = (r: number) => Math.max(...cols[r].map((m) => boxes[m].w))
+  const colH = (r: number) => cols[r].reduce((s, m) => s + boxes[m].h, 0) + gapY(cols[r]) * (cols[r].length - 1)
+  const gapAfter = (r: number) => Math.max(gapX, Math.max(0, ...cols[r].map((m) => outLabel.get(m) ?? 0)) + LABEL_PAD * 2)
+
+  // Chia các cột thành hàng (band). Mặc định một hàng; có `aspect` thì thử 1..n hàng, lấy cách
+  // chia có tỉ lệ rộng/cao gần nhất, với điều kiện mỗi hàng ≥ MIN_COLS_PER_ROW cột.
+  const bandsFor = (k: number): number[][] => {
+    const total = ranks.reduce((s, r) => s + colW(r) + gapAfter(r), 0)
+    const target = total / k
+    const out: number[][] = [[]]
+    let w = 0
+    for (const r of ranks) {
+      const add = colW(r) + gapAfter(r)
+      if (out.length < k && out.at(-1)!.length >= MIN_COLS_PER_ROW && w + add / 2 > target) {
+        out.push([])
+        w = 0
+      }
+      out.at(-1)!.push(r)
+      w += add
     }
-    const label = Math.max(0, ...col.map((m) => outLabel.get(m) ?? 0))
-    x += Math.max(...col.map((m) => boxes[m].w)) + Math.max(gapX, label + LABEL_PAD * 2)
+    return out
+  }
+  const sizeOf = (bands: number[][]) => {
+    const w = Math.max(...bands.map((b) => b.reduce((s, r, i) => s + colW(r) + (i < b.length - 1 ? gapAfter(r) : 0), 0)))
+    const h = bands.reduce((s, b) => s + Math.max(...b.map(colH)), 0) + BAND_GAP * (bands.length - 1)
+    return { w, h }
+  }
+  let bands = [ranks]
+  if (opts.aspect && ranks.length >= MIN_COLS_PER_ROW * 2 && sizeOf(bands).w > MIN_WRAP_W) {
+    let best = Infinity
+    for (let k = 1; k <= Math.ceil(ranks.length / MIN_COLS_PER_ROW); k++) {
+      const b = bandsFor(k)
+      if (b.some((band) => band.length < MIN_COLS_PER_ROW)) continue
+      const { w, h } = sizeOf(b)
+      const score = Math.abs(Math.log(w / h / opts.aspect))
+      if (score < best) {
+        best = score
+        bands = b
+      }
+    }
+  }
+
+  // Zigzag: hàng chẵn đi trái → phải, hàng lẻ quay đầu phải → trái. Cột đầu của mỗi hàng
+  // thẳng hàng với cột cuối của hàng trên, nên mũi tên chuyển hàng chỉ là một đoạn đi xuống.
+  let by = oy
+  let maxH = 0
+  let lastX = ox
+  let lastR = -1
+  const placed: string[] = []
+  bands.forEach((band, i) => {
+    const bandH = Math.max(...band.map(colH))
+    const rightward = i % 2 === 0
+    // Hàng mới bắt đầu lùi ra ngoài một cột so với cột cuối hàng trên: mũi tên chuyển hàng đi
+    // vòng ra ngoài rồi xuống, không xuyên qua các ô khác trong cột cuối.
+    let x = i === 0 ? ox : rightward ? lastX - gapAfter(lastR) - colW(band[0]) : lastX + colW(lastR) + gapAfter(lastR)
+    band.forEach((r, j) => {
+      if (j > 0) x = rightward ? x + colW(band[j - 1]) + gapAfter(band[j - 1]) : x - gapAfter(band[j - 1]) - colW(r)
+      // Cột thứ hai sau khi quay đầu không được lọt vào khoảng giữa cột cuối hàng trên và cột
+      // quay đầu: mũi tên từ hàng trên đi xuống qua đúng khoảng đó.
+      if (i > 0 && j === 1) x = rightward ? Math.max(x, lastX + colW(lastR) + LABEL_PAD) : Math.min(x, lastX - colW(r) - LABEL_PAD)
+      let y = by + (bandH - colH(r)) / 2
+      for (const m of cols[r]) {
+        out[m] = { ...boxes[m], x, y }
+        bandOf[m] = i
+        placed.push(m)
+        y += boxes[m].h + gapY(cols[r])
+      }
+    })
+    lastX = x
+    lastR = band.at(-1)!
+    by += bandH + BAND_GAP
+    maxH = by - BAND_GAP - oy
   })
+  // Hàng quay đầu có thể lấn sang trái gốc: dời cả khối về lại gốc.
+  const shiftX = ox - Math.min(...placed.map((m) => out[m].x))
+  if (shiftX > 0) for (const m of placed) out[m].x += shiftX
 
   // Ô không nối gì: lưới tối đa 3 cột, dưới phần luồng.
   let iy = connected.length ? oy + maxH + GAP_Y * 2 : oy
@@ -232,9 +342,10 @@ export function tidy(
     let ix = ox
     for (const m of row) {
       out[m] = { ...boxes[m], x: ix, y: iy }
+      bandOf[m] = -1
       ix += boxes[m].w + GAP_Y
     }
     iy += Math.max(...row.map((m) => boxes[m].h)) + GAP_Y
   }
-  return out
+  return { boxes: out, band: bandOf }
 }

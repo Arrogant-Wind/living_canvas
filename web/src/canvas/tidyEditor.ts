@@ -1,4 +1,4 @@
-import { overlaps, tidy, type Box } from '@lc/shared'
+import { overlaps, tidyLayout, type Box } from '@lc/shared'
 import type { Editor, TLShapeId } from 'tldraw'
 import { graphId, WF_NODE } from './storeToGraph'
 import { frameContentTop, type WfNodeShape } from './WfNodeShape'
@@ -6,6 +6,13 @@ import { currentGraph } from '../proposal/useProposal'
 
 const sid = (id: string) => `shape:${id}` as TLShapeId
 const FRAME_PAD = 20
+const FRAME_ASPECT = 2.5
+
+function viewportAspect(editor: Editor) {
+  const v = editor.getViewportScreenBounds()
+  // Tab chạy nền có thể báo khung nhìn 1×1: khi đó dùng tỉ lệ màn hình phổ biến.
+  return v.w >= 200 && v.h >= 200 ? v.w / v.h : 16 / 9
+}
 
 /** Box (tọa độ trang) của mọi ô workflow thật, kể cả ô con trong khung. */
 export function pageBoxes(editor: Editor): Record<string, Box> {
@@ -76,10 +83,12 @@ export interface TidyPreview {
 function tidyOne(editor: Editor, scope: string | null): Map<string, { dx: number; dy: number }> {
   const boxes = pageBoxes(editor)
   const frame = scope ? (editor.getShape(sid(scope)) as WfNodeShape | undefined) : undefined
-  const target = tidy(currentGraph(editor), boxes, scope, {
+  const { boxes: target, band } = tidyLayout(currentGraph(editor), boxes, scope, {
     headerH: frame ? frameContentTop(editor, frame) : undefined,
     gapX: scope ? 80 : 120,
     labelW: labelWidths(editor),
+    // Luồng dài thì xuống hàng: cả trang theo tỉ lệ khung nhìn, trong khung thì dẹt hơn một chút.
+    aspect: scope ? FRAME_ASPECT : viewportAspect(editor),
   })
   const moved = new Map<string, { dx: number; dy: number }>()
   for (const [id, b] of Object.entries(target)) {
@@ -96,7 +105,59 @@ function tidyOne(editor: Editor, scope: string | null): Map<string, { dx: number
     const h = Math.max(...kids.map((k) => k.y + k.h)) - fb.y + FRAME_PAD
     editor.updateShape({ id: frame.id, type: WF_NODE, props: { w, h } } as any)
   }
+  setRowChangeAnchors(editor, band)
   return moved
+}
+
+/** Ô thành viên (theo `band`) chứa ô `id`, hoặc chính nó. */
+function memberOf(editor: Editor, id: TLShapeId, band: Record<string, number>): string | null {
+  for (let s = editor.getShape(id); s; s = editor.getShape(s.parentId as TLShapeId)) {
+    if (graphId(s.id) in band) return graphId(s.id)
+    if (s.parentId === editor.getCurrentPageId()) break
+  }
+  return null
+}
+
+/**
+ * Mũi tên nối sang hàng khác (sau khi xuống dòng) bám vào cạnh trên của ô đích, để nó đi thẳng
+ * xuống thay vì vòng vào cạnh bên và chạy trùng với mũi tên đi ra từ cạnh đó. Mũi tên trong
+ * cùng hàng trả về điểm bám giữa như mặc định.
+ */
+function setRowChangeAnchors(editor: Editor, band: Record<string, number>) {
+  for (const s of editor.getCurrentPageShapes()) {
+    if (s.type !== 'arrow') continue
+    const bs = editor.getBindingsFromShape(s.id, 'arrow')
+    const start = bs.find((b) => (b.props as any).terminal === 'start')
+    const end = bs.find((b) => (b.props as any).terminal === 'end')
+    if (!start || !end) continue
+    const a = memberOf(editor, start.toId, band)
+    const b = memberOf(editor, end.toId, band)
+    if (!a || !b || a === b) continue
+    const crossRow = band[a] >= 0 && band[b] >= 0 && band[a] !== band[b]
+    const p = end.props as any
+    const want = crossRow
+      ? { normalizedAnchor: { x: 0.5, y: band[b] > band[a] ? 0 : 1 }, isPrecise: true }
+      : { normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false }
+    if (p.isPrecise === want.isPrecise && p.normalizedAnchor.x === want.normalizedAnchor.x && p.normalizedAnchor.y === want.normalizedAnchor.y) continue
+    editor.updateBinding({ ...end, props: { ...p, ...want } } as any)
+  }
+}
+
+/** Các đoạn thẳng của mũi tên đang vẽ (tọa độ trang), làm "vật cản" mỏng cho việc đặt note. */
+function arrowSegmentBoxes(editor: Editor): Box[] {
+  const out: Box[] = []
+  for (const s of editor.getCurrentPageShapes()) {
+    if (s.type !== 'arrow') continue
+    const geo = editor.getShapeGeometry(s.id) as any
+    const line = geo.children?.find((c: any) => !c.isLabel) ?? geo
+    const t = editor.getShapePageTransform(s.id)
+    const pts = (line.vertices ?? []).map((v: any) => t.applyToPoint(v))
+    for (let i = 1; i < pts.length; i++) {
+      const [p, q] = [pts[i - 1], pts[i]]
+      out.push({ x: Math.min(p.x, q.x) - 4, y: Math.min(p.y, q.y) - 4, w: Math.abs(q.x - p.x) + 8, h: Math.abs(q.y - p.y) + 8 })
+    }
+  }
+  return out
 }
 
 /**
@@ -104,15 +165,18 @@ function tidyOne(editor: Editor, scope: string | null): Map<string, { dx: number
  * khác hay nhãn mũi tên. Note không ghim vào ô nào thì để nguyên.
  */
 function placePinnedNotes(editor: Editor) {
-  const blockers: Box[] = [...Object.values(pageBoxes(editor)), ...Object.values(labelBoxes(editor))]
+  const blockers: Box[] = [...Object.values(pageBoxes(editor)), ...Object.values(labelBoxes(editor)), ...arrowSegmentBoxes(editor)]
   const nodes = pageBoxes(editor)
   for (const s of editor.getCurrentPageShapes()) {
     if (s.type !== 'note' || s.parentId !== editor.getCurrentPageId()) continue
     const t = nodes[(s.meta.targetIds as string[] | undefined)?.[0] ?? '']
     const nb = editor.getShapePageBounds(s.id)
     if (!t || !nb) continue
-    let box = { x: t.x, y: t.y - nb.h - 40, w: nb.w, h: nb.h }
-    for (let i = 0; i < 50 && blockers.some((b) => overlaps(box, b, 12)); i++) box = { ...box, x: box.x + 40 }
+    // Thử dời sang phải từng 40px; sau mỗi 8 lần chưa được thì nhấc lên cao thêm 60px.
+    const base = { x: t.x, y: t.y - nb.h - 40, w: nb.w, h: nb.h }
+    let box = base
+    for (let i = 0; i < 160 && blockers.some((b) => overlaps(box, b, 12)); i++)
+      box = { ...base, x: base.x + ((i + 1) % 8) * 40, y: base.y - Math.floor((i + 1) / 8) * 60 }
     blockers.push(box)
     editor.updateShape({ id: s.id, type: 'note', x: box.x, y: box.y } as any)
   }
@@ -139,19 +203,29 @@ function framesInside(editor: Editor, scope: string | null): string[] {
  * vì kích thước khung trong quyết định chỗ của nó ở tầng ngoài.
  */
 export function startTidy(editor: Editor, scope: string | null): TidyPreview | null {
-  const before = JSON.stringify(pageBoxes(editor))
+  const before = layoutSignature(editor)
   const markId = editor.markHistoryStoppingPoint('tidy')
   editor.run(() => {
     for (const f of framesInside(editor, scope)) tidyOne(editor, f)
     tidyOne(editor, scope)
     if (!scope) placePinnedNotes(editor)
   })
-  if (JSON.stringify(pageBoxes(editor)) === before) {
+  if (layoutSignature(editor) === before) {
     editor.bailToMark(markId)
     return null
   }
   const frame = scope ? (editor.getShape(sid(scope)) as WfNodeShape | undefined) : undefined
   return { markId, scope, label: frame ? `khung “${frame.props.title}”` : 'cả sơ đồ' }
+}
+
+/** Vị trí/kích thước mọi shape và điểm bám mũi tên: để biết lần sắp xếp có đổi gì không. */
+function layoutSignature(editor: Editor): string {
+  const shapes = editor.getCurrentPageShapes().map((s) => [s.id, Math.round(s.x), Math.round(s.y), (s.props as any).w, (s.props as any).h])
+  const binds = editor
+    .getCurrentPageShapes()
+    .filter((s) => s.type === 'arrow')
+    .flatMap((s) => editor.getBindingsFromShape(s.id, 'arrow').map((b) => [b.id, JSON.stringify((b.props as any).normalizedAnchor), (b.props as any).isPrecise]))
+  return JSON.stringify([shapes, binds])
 }
 
 export function rejectTidy(editor: Editor, p: TidyPreview) {

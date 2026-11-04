@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Graph } from '../src/ir'
 import { overlaps, type Box } from '../src/layout'
-import { findClutter, tidy } from '../src/tidy'
+import { findClutter, tidy, tidyLayout } from '../src/tidy'
 
 const n = (id: string, extra = {}) => ({ id, title: id, status: 'draft' as const, ...extra })
 const e = (from: string, to: string) => ({ id: `${from}-${to}`, from, to, type: 'flow' as const })
@@ -118,11 +118,93 @@ describe('tidy with arrow labels', () => {
   })
 })
 
+describe('tidy wrapping with a branching last column', () => {
+  it('does not route the row change through a sibling in the same column', () => {
+    // a → b → c → {d1, d2} → e → f → g → h : cột của d1/d2 là cột cuối hàng đầu.
+    const ids = ['a', 'b', 'c', 'd1', 'd2', 'e', 'f', 'g', 'h']
+    const g: Graph = {
+      nodes: ids.map((id) => n(id)),
+      edges: [e('a', 'b'), e('b', 'c'), e('c', 'd1'), e('c', 'd2'), e('d1', 'e'), e('d2', 'e'), e('e', 'f'), e('f', 'g'), e('g', 'h')],
+      notes: [],
+    }
+    const boxes = Object.fromEntries(ids.map((id) => [id, box(0, 0)]))
+    const out = tidy(g, boxes, null, { aspect: 16 / 9 })
+    const issues = findClutter(g, out).filter((i) => i.kind === 'arrow-through')
+    expect(issues).toEqual([])
+  })
+})
+
+describe('tidy wrapping with a wide last column', () => {
+  it('keeps the next row clear of the arrows coming down from a wide column', () => {
+    // c là khung rộng, d nhỏ ở cùng cột; cả hai đi xuống e (cột quay đầu), rồi e → f → g.
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    const g: Graph = {
+      nodes: ids.map((id) => n(id)),
+      edges: [e('a', 'b'), e('b', 'c'), e('b', 'd'), e('c', 'e'), e('d', 'e'), e('e', 'f'), e('f', 'g'), e('g', 'h')],
+      notes: [],
+    }
+    const boxes = Object.fromEntries(ids.map((id) => [id, id === 'c' ? box(0, 0, 480, 116) : box(0, 0)]))
+    const out = tidy(g, boxes, null, { aspect: 16 / 9, labelW: { 'c-e': 260, 'd-e': 120, 'e-f': 160 } })
+    expect(findClutter(g, out).filter((i) => i.kind === 'arrow-through')).toEqual([])
+  })
+})
+
 describe('tidy spacing for labelled branches', () => {
   it('spreads branch targets further apart when their incoming arrows carry labels', () => {
     const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
     const out = tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null, { labelW: { 'a-b': 150, 'a-c': 200 } })
     const [top, bottom] = [out.b, out.c].sort((p, q) => p.y - q.y)
     expect(bottom.y - (top.y + top.h)).toBeGreaterThanOrEqual(80)
+  })
+})
+
+describe('tidy wrapping', () => {
+  const chain = (k: number): Graph => ({
+    nodes: Array.from({ length: k }, (_, i) => n(`s${i}`)),
+    edges: Array.from({ length: k - 1 }, (_, i) => e(`s${i}`, `s${i + 1}`)),
+    notes: [],
+  })
+  const zero = (k: number) => Object.fromEntries(Array.from({ length: k }, (_, i) => [`s${i}`, box(0, 0)]))
+
+  it('keeps a long chain on one row when no aspect is given', () => {
+    const out = tidy(chain(8), zero(8), null)
+    expect(new Set(Object.values(out).map((b) => b.y)).size).toBe(1)
+  })
+
+  it('wraps a long chain into zigzag rows so the step between rows is short', () => {
+    const out = tidy(chain(8), zero(8), null, { aspect: 16 / 9 })
+    const ids = Array.from({ length: 8 }, (_, i) => `s${i}`)
+    const rowYs = [...new Set(ids.map((id) => out[id].y))].sort((a, b) => a - b)
+    expect(rowYs.length).toBeGreaterThan(1)
+    noOverlap(Object.values(out))
+    // Trong một hàng: hàng chẵn đi sang phải, hàng lẻ đi sang trái.
+    for (let i = 1; i < ids.length; i++) {
+      const a = out[ids[i - 1]]
+      const b = out[ids[i]]
+      const row = rowYs.indexOf(a.y)
+      if (a.y === b.y) expect(row % 2 === 0 ? b.x > a.x : b.x < a.x).toBe(true)
+      // Chuyển hàng: ô kế tiếp ở hàng dưới, lùi ra ngoài một cột theo hướng của hàng trên
+      // (để mũi tên đi vòng ra ngoài, không xuyên qua các ô khác cùng cột).
+      else expect(row % 2 === 0 ? b.x > a.x : b.x < a.x).toBe(true)
+    }
+    const xs = Object.values(out).map((b) => b.x)
+    const ys = Object.values(out).map((b) => b.y + b.h)
+    const w = Math.max(...xs) + 200 - Math.min(...xs)
+    const h = Math.max(...ys) - Math.min(...Object.values(out).map((b) => b.y))
+    // Một hàng thì 8 ô dài ~43:1; xuống hàng phải gọn hơn hẳn.
+    expect(w / h).toBeLessThan(10)
+  })
+
+  it('reports which row each node landed in', () => {
+    const { boxes, band } = tidyLayout(chain(8), zero(8), null, { aspect: 16 / 9 })
+    const ids = Array.from({ length: 8 }, (_, i) => `s${i}`)
+    expect(band.s0).toBe(0)
+    expect(band.s7).toBeGreaterThan(0)
+    for (const id of ids) expect(boxes[id].y > boxes.s0.y).toBe(band[id] > 0)
+  })
+
+  it('does not wrap a short chain', () => {
+    const out = tidy(chain(3), zero(3), null, { aspect: 16 / 9 })
+    expect(new Set(Object.values(out).map((b) => b.y)).size).toBe(1)
   })
 })
