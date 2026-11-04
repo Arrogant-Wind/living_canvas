@@ -1,4 +1,7 @@
+import { useContext } from 'react'
 import { createShapeId, toRichText, useEditor, useValue } from 'tldraw'
+import { tidyScopeForSelection } from '../canvas/tidyEditor'
+import { TidyContext } from './Tidy'
 import { graphId, WF_NODE } from '../canvas/storeToGraph'
 import { MIN_H, type WfNodeShape } from '../canvas/WfNodeShape'
 
@@ -6,6 +9,7 @@ const KINDS = ['unknown', 'agent', 'llm', 'code', 'human'] as const
 
 export function Toolbar() {
   const editor = useEditor()
+  const tidy = useContext(TidyContext)
   const selected = useValue(
     'selected wf-nodes',
     () => editor.getSelectedShapes().filter((s): s is WfNodeShape => s.type === WF_NODE && !s.meta.ghost),
@@ -50,6 +54,12 @@ export function Toolbar() {
       <button onClick={() => addNode(true)}>+ Khung</button>
       <button disabled={!selected.length} onClick={addComment} title="Tạo note ghim vào các node đang chọn">
         💬 Comment
+      </button>
+      <button
+        onClick={() => tidy.start(tidyScopeForSelection(editor))}
+        title="Xếp lại theo luồng: khung đang chọn (hoặc khung chứa ô đang chọn), không chọn gì thì cả sơ đồ"
+      >
+        ⇄ Sắp xếp lại
       </button>
       {one && (
         <div className="lc-inspector">

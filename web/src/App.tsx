@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { pushAside, type Box, type Graph } from '@lc/shared'
 import {
   ArrowBindingUtil,
@@ -17,7 +17,9 @@ import { WfNodeShapeUtil } from './canvas/WfNodeShape'
 import { currentGraph, useProposal } from './proposal/useProposal'
 import { ChatPanel } from './ui/ChatPanel'
 import { ProposalBar } from './ui/ProposalBar'
+import { rejectTidy, startTidy, type TidyPreview } from './canvas/tidyEditor'
 import { HoverCard } from './ui/HoverCard'
+import { ClutterHints, TidyBar, TidyContext } from './ui/Tidy'
 import { Toolbar } from './ui/Toolbar'
 
 const shapeUtils = [WfNodeShapeUtil]
@@ -35,6 +37,7 @@ function Overlay() {
     <>
       <Toolbar />
       <HoverCard />
+      <ClutterHints />
     </>
   )
 }
@@ -48,6 +51,9 @@ function setupWorkflowCanvas(editor: Editor) {
   // Khung (ở cấp trang) to ra thì đẩy các ô bên phải / bên dưới ra, không để khung đè lên chúng.
   editor.sideEffects.registerAfterChangeHandler('shape', (prev, next) => {
     if (next.type !== WF_NODE || next.parentId !== editor.getCurrentPageId() || !(next.props as any).container) return
+    // Undo/redo/bail phát lại cả việc đẩy đã ghi; đẩy thêm lần nữa sẽ đẩy gấp đôi.
+    // (`history` là protected trong tldraw 5; 'paused' = đang undo/redo hoặc ghi với history: 'ignore'.)
+    if ((editor as any).history?.state === 'paused') return
     const a = prev.props as any
     const b = next.props as any
     if (b.w <= a.w && b.h <= a.h) return
@@ -88,6 +94,28 @@ export function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('pending')
   const prevGraph = useRef<Graph | undefined>(undefined)
   const { proposal, propose, accept, reject } = useProposal(editor)
+  const [tidyPreview, setTidyPreview] = useState<TidyPreview | null>(null)
+
+  const startTidyAt = useCallback(
+    (scope: string | null) => {
+      if (!editor) return
+      reject() // ghost của đề xuất AI sẽ lệch chỗ nếu xếp lại bên dưới nó
+      if (tidyPreview) setTidyPreview(null) // lần trước coi như đã giữ
+      setTidyPreview(startTidy(editor, scope))
+    },
+    [editor, reject, tidyPreview],
+  )
+  const tidyApi = useMemo(() => ({ preview: tidyPreview, start: startTidyAt }), [tidyPreview, startTidyAt])
+
+  // Đang xem trước mà người dùng bắt đầu thao tác trên canvas thì coi như giữ kết quả.
+  useEffect(() => {
+    if (!editor || !tidyPreview) return
+    const onEvent = (info: { name: string }) => info.name === 'pointer_down' && setTidyPreview(null)
+    editor.on('event', onEvent as any)
+    return () => {
+      editor.off('event', onEvent as any)
+    }
+  }, [editor, tidyPreview])
 
   // Tải project, rồi tự lưu (debounce 800ms, thử lại mỗi 5s khi lỗi, lưu ngay khi đóng tab).
   useEffect(() => {
@@ -171,6 +199,7 @@ export function App() {
   return (
     <div className="lc-app">
       <div className="lc-canvas">
+        <TidyContext.Provider value={tidyApi}>
         <Tldraw
           shapeUtils={shapeUtils}
           bindingUtils={bindingUtils}
@@ -181,7 +210,18 @@ export function App() {
             setEditor(e)
           }}
         />
+        </TidyContext.Provider>
         {proposal && <ProposalBar key={proposal.id} proposal={proposal} onAccept={onAccept} onReject={reject} />}
+        {tidyPreview && !proposal && (
+          <TidyBar
+            preview={tidyPreview}
+            onAccept={() => setTidyPreview(null)}
+            onReject={() => {
+              if (editor) rejectTidy(editor, tidyPreview)
+              setTidyPreview(null)
+            }}
+          />
+        )}
       </div>
       <ChatPanel messages={messages} selection={selection} busy={busy} onSend={send} saveStatus={saveStatus} />
     </div>

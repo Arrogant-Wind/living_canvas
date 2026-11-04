@@ -48,3 +48,6 @@ html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif;
 .lc-hover ul { margin: 2px 0 0; padding-left: 16px; }
 .lc-hover pre { margin: 3px 0 0; background: #f6f6f6; border-radius: 4px; padding: 4px 6px; font-size: 10.5px; max-height: 160px; overflow: hidden; white-space: pre-wrap; }
 .lc-hover-empty { margin: 4px 0 0; color: #999; font-style: italic; }
+.lc-clutter { position: absolute; z-index: 340; pointer-events: all; white-space: nowrap; font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 12px; border: 1px solid #ff8f00; background: #fff8e1; color: #8a4b00; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.lc-clutter:hover { background: #ffecb3; }
+.lc-clutter-page { top: 12px; left: 50%; transform: translateX(-50%); }
