@@ -4,13 +4,17 @@ import { overlaps, type Box } from './layout'
 /** Chỗ rối trên canvas, tìm bằng code (không cần AI). `scope` = khung chứa (null = trang). */
 export interface Clutter {
   scope: string | null
-  kind: 'overlap' | 'arrow-through'
+  kind: 'overlap' | 'arrow-through' | 'label-overlap' | 'note-overlap'
   ids: string[]
 }
 
 const PAD = 20
 const GAP_Y = 40
+/** Khe dọc khi các ô trong cột nhận mũi tên có nhãn: đủ chỗ cho hai nhãn không đè nhau. */
+const GAP_Y_LABELLED = 88
 const ISO_PER_ROW = 3
+/** Khoảng trống hai bên nhãn mũi tên trong khe giữa hai cột. */
+const LABEL_PAD = 20
 
 const parentOf = (g: Graph) => {
   const ids = new Set(g.nodes.map((n) => n.id))
@@ -49,7 +53,15 @@ function segmentHitsBox(p: { x: number; y: number }, q: { x: number; y: number }
   return true
 }
 
-export function findClutter(g: Graph, boxes: Record<string, Box>): Clutter[] {
+/**
+ * `extras.labels`: box nhãn của từng mũi tên (theo edge id); `extras.notes`: box của note.
+ * Cả hai đều ở tọa độ trang, do canvas đo (model không biết chữ hiển thị to cỡ nào).
+ */
+export function findClutter(
+  g: Graph,
+  boxes: Record<string, Box>,
+  extras: { labels?: Record<string, Box>; notes?: Record<string, Box> } = {},
+): Clutter[] {
   const parent = parentOf(g)
   const out: Clutter[] = []
   const nodes = g.nodes.filter((n) => boxes[n.id])
@@ -80,6 +92,36 @@ export function findClutter(g: Graph, boxes: Record<string, Box>): Clutter[] {
       }
     }
   }
+
+  // Nhãn mũi tên: chồng nhãn khác, hoặc đè lên ô không phải hai đầu của nó.
+  const labels = Object.entries(extras.labels ?? {})
+  const edgeById = new Map(g.edges.map((e) => [e.id, e]))
+  const edgeScope = (id: string) => {
+    const e = edgeById.get(id)
+    return e && parent(e.from) === parent(e.to) ? parent(e.from) : null
+  }
+  for (let i = 0; i < labels.length; i++)
+    for (let j = i + 1; j < labels.length; j++)
+      if (overlaps(labels[i][1], labels[j][1], 0))
+        out.push({ scope: edgeScope(labels[i][0]) === edgeScope(labels[j][0]) ? edgeScope(labels[i][0]) : null, kind: 'label-overlap', ids: [labels[i][0], labels[j][0]] })
+  const isFrame = new Set(g.nodes.map((n) => n.parentId).filter(Boolean) as string[])
+  for (const [id, lb] of labels) {
+    const e = edgeById.get(id)
+    const skip = new Set(e ? [e.from, e.to, ...ancestors(e.from), ...ancestors(e.to)] : [])
+    for (const n of nodes)
+      // Khung chỉ tính phần tiêu đề/viền; nhãn đi ngang qua lòng khung trống thì không sao.
+      if (!skip.has(n.id) && !isFrame.has(n.id) && overlaps(lb, boxes[n.id], 0))
+        out.push({ scope: edgeScope(id), kind: 'label-overlap', ids: [id, n.id] })
+  }
+
+  // Note đè lên ô, lên nhãn hoặc lên note khác.
+  const notes = Object.entries(extras.notes ?? {})
+  for (let i = 0; i < notes.length; i++) {
+    const [id, nb] = notes[i]
+    for (const n of nodes) if (!isFrame.has(n.id) && overlaps(nb, boxes[n.id], 0)) out.push({ scope: null, kind: 'note-overlap', ids: [id, n.id] })
+    for (const [lid, lb] of labels) if (overlaps(nb, lb, 0)) out.push({ scope: null, kind: 'note-overlap', ids: [id, lid] })
+    for (let j = i + 1; j < notes.length; j++) if (overlaps(nb, notes[j][1], 0)) out.push({ scope: null, kind: 'note-overlap', ids: [id, notes[j][0]] })
+  }
   return out
 }
 
@@ -93,7 +135,7 @@ export function tidy(
   g: Graph,
   boxes: Record<string, Box>,
   scope: string | null,
-  opts: { headerH?: number; gapX?: number } = {},
+  opts: { headerH?: number; gapX?: number; labelW?: Record<string, number> } = {},
 ): Record<string, Box> {
   const parent = parentOf(g)
   const gapX = opts.gapX ?? 120
@@ -108,11 +150,17 @@ export function tidy(
   // Cạnh giữa các thành viên (cạnh tới con của một thành viên tính là tới thành viên đó).
   const succ = new Map<string, string[]>(members.map((m) => [m, []]))
   const seen = new Set<string>()
+  /** Nhãn rộng nhất trên các mũi tên rời mỗi thành viên (để nới khe sau cột của nó). */
+  const outLabel = new Map<string, number>()
+  /** Thành viên có mũi tên mang nhãn đi vào: cột của nó cần khe dọc rộng hơn cho nhãn. */
+  const labelledIn = new Set<string>()
   for (const e of g.edges) {
-    if (e.type !== 'flow') continue
     const a = rep(e.from)
     const b = rep(e.to)
-    if (!a || !b || a === b || seen.has(`${a}>${b}`)) continue
+    if (!a || !b || a === b) continue
+    outLabel.set(a, Math.max(outLabel.get(a) ?? 0, opts.labelW?.[e.id] ?? 0))
+    if (opts.labelW?.[e.id]) labelledIn.add(b)
+    if (e.type !== 'flow' || seen.has(`${a}>${b}`)) continue
     seen.add(`${a}>${b}`)
     succ.get(a)!.push(b)
   }
@@ -162,7 +210,8 @@ export function tidy(
     }
     col.forEach((m, i) => index.set(m, i))
   })
-  const colH = cols.map((col) => (col ?? []).reduce((s, m) => s + boxes[m].h, 0) + GAP_Y * Math.max(0, (col ?? []).length - 1))
+  const gapY = (col: string[]) => (col.some((m) => labelledIn.has(m)) ? GAP_Y_LABELLED : GAP_Y)
+  const colH = cols.map((col) => (col ?? []).reduce((s, m) => s + boxes[m].h, 0) + gapY(col ?? []) * Math.max(0, (col ?? []).length - 1))
   const maxH = Math.max(0, ...colH)
   let x = ox
   cols.forEach((col, r) => {
@@ -170,9 +219,10 @@ export function tidy(
     let y = oy + (maxH - colH[r]) / 2
     for (const m of col) {
       out[m] = { ...boxes[m], x, y }
-      y += boxes[m].h + GAP_Y
+      y += boxes[m].h + gapY(col)
     }
-    x += Math.max(...col.map((m) => boxes[m].w)) + gapX
+    const label = Math.max(0, ...col.map((m) => outLabel.get(m) ?? 0))
+    x += Math.max(...col.map((m) => boxes[m].w)) + Math.max(gapX, label + LABEL_PAD * 2)
   })
 
   // Ô không nối gì: lưới tối đa 3 cột, dưới phần luồng.

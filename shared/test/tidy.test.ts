@@ -84,3 +84,45 @@ describe('findClutter', () => {
     expect(issues).toEqual([{ scope: null, kind: 'arrow-through', ids: ['a-c', 'b'] }])
   })
 })
+
+describe('findClutter with arrow labels and notes', () => {
+  const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
+  const boxes = { a: box(0, 0), b: box(400, -100), c: box(400, 100) }
+
+  it('reports two arrow labels that overlap', () => {
+    const labels = { 'a-b': box(250, 0, 80, 60), 'a-c': box(260, 30, 80, 60) }
+    expect(findClutter(g, boxes, { labels })).toContainEqual({ scope: null, kind: 'label-overlap', ids: ['a-b', 'a-c'] })
+  })
+
+  it('reports a label covering a node that is not one of its ends', () => {
+    const labels = { 'a-b': box(390, 110, 60, 20) }
+    expect(findClutter(g, boxes, { labels })).toContainEqual({ scope: null, kind: 'label-overlap', ids: ['a-b', 'c'] })
+  })
+
+  it('reports a note covering a node', () => {
+    const notes = { n1: box(380, -120, 200, 200) }
+    expect(findClutter(g, boxes, { notes })).toContainEqual({ scope: null, kind: 'note-overlap', ids: ['n1', 'b'] })
+  })
+
+  it('stays quiet when labels sit in free space', () => {
+    const labels = { 'a-b': box(250, -60, 80, 20), 'a-c': box(250, 80, 80, 20) }
+    expect(findClutter(g, boxes, { labels })).toEqual([])
+  })
+})
+
+describe('tidy with arrow labels', () => {
+  it('widens a column gap to fit the longest label leaving that column', () => {
+    const g: Graph = { nodes: [n('a'), n('b')], edges: [e('a', 'b')], notes: [] }
+    const out = tidy(g, { a: box(0, 0), b: box(0, 0) }, null, { labelW: { 'a-b': 300 } })
+    expect(out.b.x - (out.a.x + out.a.w)).toBeGreaterThanOrEqual(340)
+  })
+})
+
+describe('tidy spacing for labelled branches', () => {
+  it('spreads branch targets further apart when their incoming arrows carry labels', () => {
+    const g: Graph = { nodes: [n('a'), n('b'), n('c')], edges: [e('a', 'b'), e('a', 'c')], notes: [] }
+    const out = tidy(g, { a: box(0, 0), b: box(0, 0), c: box(0, 0) }, null, { labelW: { 'a-b': 150, 'a-c': 200 } })
+    const [top, bottom] = [out.b, out.c].sort((p, q) => p.y - q.y)
+    expect(bottom.y - (top.y + top.h)).toBeGreaterThanOrEqual(80)
+  })
+})

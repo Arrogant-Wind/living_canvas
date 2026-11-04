@@ -1,7 +1,7 @@
 import { findClutter } from '@lc/shared'
 import { createContext, useContext } from 'react'
 import { useEditor, useValue, type TLShapeId } from 'tldraw'
-import { pageBoxes, type TidyPreview } from '../canvas/tidyEditor'
+import { labelBoxes, noteBoxes, pageBoxes, type TidyPreview } from '../canvas/tidyEditor'
 import { currentGraph } from '../proposal/useProposal'
 
 export interface TidyApi {
@@ -18,7 +18,10 @@ export function ClutterHints() {
     'clutter',
     () => {
       if (editor.isInAny('select.translating', 'select.resizing', 'select.dragging_handle')) return []
-      const issues = findClutter(currentGraph(editor), pageBoxes(editor))
+      const issues = findClutter(currentGraph(editor), pageBoxes(editor), {
+        labels: labelBoxes(editor),
+        notes: noteBoxes(editor),
+      })
       const byScope = new Map<string | null, number>()
       for (const i of issues) byScope.set(i.scope, (byScope.get(i.scope) ?? 0) + 1)
       return [...byScope].map(([scope, count]) => {

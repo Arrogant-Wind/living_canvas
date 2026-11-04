@@ -144,6 +144,8 @@ export async function proposalToPartials(
           y: 0,
           props: {
             kind: 'elbow',
+            size: 's',
+            font: 'sans',
             start: { x: a.x + a.w, y: a.y + a.h / 2 },
             end: { x: b.x, y: b.y + b.h / 2 },
             richText: plainToRichText(op.label ?? ''),

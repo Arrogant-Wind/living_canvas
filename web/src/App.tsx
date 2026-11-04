@@ -3,6 +3,8 @@ import { pushAside, type Box, type Graph } from '@lc/shared'
 import {
   ArrowBindingUtil,
   ArrowShapeKindStyle,
+  DefaultFontStyle,
+  DefaultSizeStyle,
   Tldraw,
   useValue,
   type BindingOnShapeDeleteOptions,
@@ -48,6 +50,9 @@ const components = { InFrontOfTheCanvas: Overlay, StylePanel: null }
 function setupWorkflowCanvas(editor: Editor) {
   // Mũi tên người dùng vẽ cũng là mũi tên gấp khúc bám vào cạnh ô, như mũi tên AI tạo.
   editor.setStyleForNextShapes(ArrowShapeKindStyle, 'elbow')
+  // Nhãn mũi tên font thường cỡ nhỏ: font vẽ tay cỡ M chiếm gấp đôi chỗ và dễ đè nhau.
+  editor.setStyleForNextShapes(DefaultSizeStyle, 's')
+  editor.setStyleForNextShapes(DefaultFontStyle, 'sans')
   // Khung (ở cấp trang) to ra thì đẩy các ô bên phải / bên dưới ra, không để khung đè lên chúng.
   editor.sideEffects.registerAfterChangeHandler('shape', (prev, next) => {
     if (next.type !== WF_NODE || next.parentId !== editor.getCurrentPageId() || !(next.props as any).container) return
@@ -82,6 +87,10 @@ function stripGhosts(editor: Editor) {
       editor.deleteShapes(shapes.filter((s) => s.meta.ghost).map((s) => s.id))
       for (const s of shapes)
         if (s.meta.pendingOp) editor.updateShape({ id: s.id, type: s.type, meta: { pendingOp: null } } as any)
+      // Mũi tên cũ (vẽ trước khi có quy ước nhãn nhỏ) cũng đổi sang cỡ s, font thường.
+      for (const s of shapes)
+        if (s.type === 'arrow' && ((s.props as any).size !== 's' || (s.props as any).font !== 'sans'))
+          editor.updateShape({ id: s.id, type: 'arrow', props: { size: 's', font: 'sans' } } as any)
     },
     { history: 'ignore' },
   )
