@@ -63,8 +63,19 @@ Mở <http://localhost:5173>. Server API chạy ở `127.0.0.1:8787` (chỉ nh�
 này); Vite chuyển `/api` sang đó.
 
 Mỗi project là một thư mục trong `projects/` (không đưa lên git). Mặc định là `demo`;
-mở project khác bằng `?p=<ten-project>`, ví dụ <http://localhost:5173/?p=video-lich-su>
+mở project khác bằng `?p=<ten-project>`, ví dụ <http://localhost:5173/?p=du-an-moi>
 (tên chỉ gồm chữ thường, số và `-`).
+
+### Ví dụ có sẵn
+
+Mở <http://localhost:5173/?p=video-lich-su> để xem một workflow hoàn chỉnh: sinh video
+lịch sử từ dữ kiện (thu thập, chuẩn hóa thời gian và không gian, sinh kịch bản, phân cảnh,
+tài nguyên IP, bản đồ, rồi chọn API sinh ảnh/video). Sơ đồ có khung lồng nhau, mũi tên có
+nhãn dữ liệu và note review của AI.
+
+Ví dụ nằm trong `examples/<tên>/canvas.json` và chỉ được đọc: project chưa có trong
+`projects/` thì mở từ ví dụ cùng tên, lần sửa đầu tiên được lưu sang `projects/<tên>/`.
+Muốn quay về bản gốc thì xóa `projects/<tên>/`.
 
 ## Dùng
 

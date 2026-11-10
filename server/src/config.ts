@@ -6,5 +6,6 @@ export const config = {
   timeoutMs: Number(process.env.LC_TIMEOUT_MS ?? 120_000),
   maxRepairs: 2,
   projectsDir: process.env.LC_PROJECTS_DIR ?? resolve(import.meta.dirname, '../../projects'),
+  examplesDir: resolve(import.meta.dirname, '../../examples'),
   port: Number(process.env.LC_PORT ?? 8787),
 }

@@ -5,7 +5,7 @@ import { askAi } from './orchestrator'
 import { ProjectStore } from './store'
 
 const app = createApp({
-  store: new ProjectStore(config.projectsDir),
+  store: new ProjectStore(config.projectsDir, config.examplesDir),
   ask: (i) => askAi(i),
   ai: { agent: 'Pi', bin: config.piBin, model: config.model, timeoutMs: config.timeoutMs, maxRepairs: config.maxRepairs },
 })
