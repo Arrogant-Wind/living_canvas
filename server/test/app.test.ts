@@ -7,9 +7,10 @@ import type { AskInput, AskResult } from '../src/orchestrator'
 import { PiError } from '../src/pi'
 import { ProjectStore } from '../src/store'
 
+const ai = { agent: 'Pi', bin: 'pi', model: 'fai/Alibaba:DeepSeek-V4.1-Flash', timeoutMs: 120_000, maxRepairs: 2 }
 const setup = (ask: (i: AskInput) => Promise<AskResult>) => {
   const store = new ProjectStore(mkdtempSync(join(tmpdir(), 'lc-')))
-  return { app: createApp({ store, ask }), store }
+  return { app: createApp({ store, ask, ai }), store }
 }
 const json = (body: unknown, method = 'POST') => ({
   method,
@@ -19,6 +20,11 @@ const json = (body: unknown, method = 'POST') => ({
 const graph = { nodes: [{ id: 'n1', title: 'A', status: 'draft' }], edges: [], notes: [] }
 
 describe('API', () => {
+  it('tells which agent and model answer', async () => {
+    const { app } = setup(async () => ({ reply: '', ops: [], dropped: [] }))
+    expect(await (await app.request('/api/ai')).json()).toEqual(ai)
+  })
+
   it('round-trips a canvas snapshot with Vietnamese text', async () => {
     const { app } = setup(async () => ({ reply: '', ops: [], dropped: [] }))
     const snapshot = { title: 'Chuẩn hóa thời gian, không gian' }

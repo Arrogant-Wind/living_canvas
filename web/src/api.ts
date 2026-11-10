@@ -11,6 +11,14 @@ export interface ChatMsg {
   at?: string
   refs?: ChatRef[]
 }
+/** Agent và model server đang dùng để trả lời. */
+export interface AiInfo {
+  agent: string
+  bin: string
+  model: string
+  timeoutMs: number
+  maxRepairs: number
+}
 export interface AskResult {
   reply: string
   ops: Op[]
@@ -27,6 +35,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  aiInfo: () => call<AiInfo>('/api/ai'),
   loadCanvas: (p: string) => call<{ snapshot: unknown | null }>(`${base(p)}/canvas`),
   saveCanvas: (p: string, snapshot: unknown) => {
     const body = JSON.stringify({ snapshot })

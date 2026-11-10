@@ -19,9 +19,20 @@ const PI_MESSAGES: Record<PiError['kind'], string> = {
   no_answer: 'AI (pi) không trả về câu trả lời.',
 }
 
-export function createApp(deps: { store: ProjectStore; ask: (i: AskInput) => Promise<AskResult> }) {
-  const { store, ask } = deps
+/** Agent và model đang trả lời, để UI hiện cho người dùng biết. */
+export interface AiInfo {
+  agent: string
+  bin: string
+  model: string
+  timeoutMs: number
+  maxRepairs: number
+}
+
+export function createApp(deps: { store: ProjectStore; ask: (i: AskInput) => Promise<AskResult>; ai: AiInfo }) {
+  const { store, ask, ai } = deps
   const app = new Hono()
+
+  app.get('/api/ai', (c) => c.json(ai))
 
   app.use('/api/projects/:name/*', async (c, next) => {
     if (!PROJECT_NAME.test(c.req.param('name'))) return c.json({ error: 'Tên project không hợp lệ' }, 400)

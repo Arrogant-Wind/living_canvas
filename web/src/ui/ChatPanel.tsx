@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatMsg, ChatRef } from '../api'
 import type { SaveStatus } from '../autosave'
+import { AiBadge } from './AiBadge'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
   saved: 'Đã lưu',
@@ -43,7 +44,10 @@ export function ChatPanel(props: {
   return (
     <aside className="lc-chat">
       <div className="lc-chat-head">
-        Chat với AI
+        <span className="lc-chat-title">
+          Chat với AI
+          <AiBadge busy={busy} />
+        </span>
         <span className={`lc-save lc-save-${saveStatus}`}>{SAVE_LABEL[saveStatus]}</span>
       </div>
       <div className="lc-chat-list" ref={listRef}>
