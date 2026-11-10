@@ -19,7 +19,7 @@ for (const c of cases.filter((c) => !only.length || only.includes(c.id))) {
     let reason: string | null
     let reply = ''
     try {
-      const r = await askAi({ graph: c.graph, selection: c.selection, history: [], message: c.message }, llm)
+      const r = await askAi({ graph: c.graph, refs: c.refs, history: [], message: c.message }, llm)
       reason = c.check(r)
       reply = r.reply
     } catch (e) {

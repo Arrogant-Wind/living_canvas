@@ -31,7 +31,16 @@ html, body, #root { margin: 0; height: 100%; font-family: system-ui, sans-serif;
 .lc-chat-input > button { align-self: flex-end; font: inherit; padding: 4px 14px; border-radius: 5px; border: 1px solid #7c4dff; background: #7c4dff; color: #fff; cursor: pointer; }
 .lc-chat-input > button:disabled { opacity: .5; cursor: default; }
 .lc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.lc-chip { background: #ffb300; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+.lc-chip { background: #ffb300; color: #fff; border-radius: 10px; padding: 1px 4px 1px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 2px; }
+.lc-attach { border: 1px solid #ffd54f; background: #fffbea; border-radius: 6px; padding: 5px 6px; display: flex; flex-direction: column; gap: 4px; }
+.lc-attach-head { display: flex; justify-content: space-between; align-items: center; }
+.lc-attach-name { font: inherit; font-size: 12px; font-weight: 600; color: #8a6100; background: none; border: 0; padding: 0; cursor: pointer; }
+.lc-attach-name:hover { text-decoration: underline; }
+.lc-x { font: inherit; line-height: 1; border: 0; background: none; color: inherit; cursor: pointer; padding: 0 3px; opacity: .75; }
+.lc-x:hover { opacity: 1; }
+.lc-attach-head .lc-x { color: #8a6100; font-size: 14px; }
+.lc-msg-refs { display: block; font: inherit; font-size: 11px; color: #8a6100; background: #fff3c4; border: 0; border-radius: 4px; padding: 1px 6px; margin-bottom: 4px; cursor: pointer; text-align: left; white-space: normal; }
+.lc-msg-refs:hover { background: #ffe082; }
 .lc-tags { display: flex; flex-direction: column; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
 .lc-tags button { font: inherit; text-align: left; padding: 5px 8px; border: 0; border-bottom: 1px solid #eee; background: #fafafa; cursor: pointer; }
 .lc-tags button:hover { background: #f3eeff; }

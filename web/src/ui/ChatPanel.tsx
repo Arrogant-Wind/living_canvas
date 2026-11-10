@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChatMsg } from '../api'
+import type { ChatMsg, ChatRef } from '../api'
 import type { SaveStatus } from '../autosave'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
@@ -11,19 +11,22 @@ const SAVE_LABEL: Record<SaveStatus, string> = {
 
 export const TAGS = [
   { tag: '/review', hint: 'soát lỗi logic, dữ liệu không khớp' },
-  { tag: '/expand', hint: 'bung node đang chọn thành các bước' },
+  { tag: '/expand', hint: 'bung node đính kèm thành các bước' },
   { tag: '/suggest', hint: 'đề xuất sửa sơ đồ' },
-  { tag: '/explain', hint: 'giải thích node đang chọn' },
+  { tag: '/explain', hint: 'giải thích node đính kèm' },
 ]
 
 export function ChatPanel(props: {
   messages: ChatMsg[]
-  selection: { id: string; title: string }[]
+  attached: ChatRef[]
+  /** Gỡ một node khỏi nhóm đính kèm; không truyền id thì gỡ cả nhóm. */
+  onDetach: (id?: string) => void
+  onFocusRefs: (refs: ChatRef[]) => void
   busy: boolean
   onSend: (text: string) => void
   saveStatus: SaveStatus
 }) {
-  const { messages, selection, busy, onSend, saveStatus } = props
+  const { messages, attached, onDetach, onFocusRefs, busy, onSend, saveStatus } = props
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -46,24 +49,43 @@ export function ChatPanel(props: {
       <div className="lc-chat-list" ref={listRef}>
         {messages.length === 0 && (
           <div className="lc-chat-empty">
-            Mô tả workflow, chọn node rồi nhờ AI. Gõ <b>/</b> để xem lệnh.
+            Mô tả workflow cho AI. Chọn các ô trên canvas (click hoặc kéo khung) để đính kèm chúng vào
+            lượt chat. Gõ <b>/</b> để xem lệnh.
           </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`lc-msg lc-msg-${m.role}`}>
+            {m.refs && m.refs.length > 0 && (
+              <button className="lc-msg-refs" title="Chọn nhóm này trên canvas" onClick={() => onFocusRefs(m.refs!)}>
+                📎 {m.refs.map((r) => r.title || r.id).join(', ')}
+              </button>
+            )}
             {m.text}
           </div>
         ))}
         {busy && <div className="lc-msg lc-msg-ai lc-thinking">AI đang nghĩ…</div>}
       </div>
       <div className="lc-chat-input">
-        {selection.length > 0 && (
-          <div className="lc-chips">
-            {selection.map((s) => (
-              <span key={s.id} className="lc-chip">
-                {s.title}
-              </span>
-            ))}
+        {attached.length > 0 && (
+          <div className="lc-attach">
+            <div className="lc-attach-head">
+              <button className="lc-attach-name" title="Chọn nhóm này trên canvas" onClick={() => onFocusRefs(attached)}>
+                📎 Đính kèm {attached.length} ô
+              </button>
+              <button className="lc-x" title="Gỡ cả nhóm" onClick={() => onDetach()}>
+                ×
+              </button>
+            </div>
+            <div className="lc-chips">
+              {attached.map((s) => (
+                <span key={s.id} className="lc-chip">
+                  {s.title || s.id}
+                  <button className="lc-x" title="Gỡ ô này" onClick={() => onDetach(s.id)}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
         )}
         {showTags && (

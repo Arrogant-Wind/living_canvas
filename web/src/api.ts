@@ -1,9 +1,15 @@
 import type { Graph, Op, OpError } from '@lc/shared'
 
+/** Node đính kèm vào lượt chat. */
+export interface ChatRef {
+  id: string
+  title: string
+}
 export interface ChatMsg {
   role: 'user' | 'ai' | 'error'
   text: string
   at?: string
+  refs?: ChatRef[]
 }
 export interface AskResult {
   reply: string
@@ -33,6 +39,6 @@ export const api = {
     })
   },
   loadChat: (p: string) => call<{ messages: ChatMsg[] }>(`${base(p)}/chat`),
-  ask: (p: string, body: { graph: Graph; prevGraph?: Graph; selection: string[]; message: string }) =>
+  ask: (p: string, body: { graph: Graph; prevGraph?: Graph; refs: ChatRef[]; message: string }) =>
     call<AskResult>(`${base(p)}/ask`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
 }

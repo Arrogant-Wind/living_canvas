@@ -10,7 +10,7 @@ const graph: Graph = {
   edges: [{ id: 'e1', from: 'n1', to: 'n2', type: 'flow' }],
   notes: [],
 }
-const input = (message: string): AskInput => ({ graph, selection: ['n2'], history: [], message })
+const input = (message: string): AskInput => ({ graph, refs: ['n2'], history: [], message })
 
 const scripted = (answers: string[]) => {
   const calls: { system: string; prompt: string }[] = []
@@ -60,11 +60,24 @@ describe('askAi', () => {
     expect(r.dropped).toHaveLength(1)
   })
 
-  it('puts the graph text and the selection into the prompt and picks the intent prompt', async () => {
+  it('puts the graph text and the refs into the prompt and picks the intent prompt', async () => {
     const { llm, calls } = scripted(['{"reply":"ok","ops":[]}'])
     await askAi(input('/review'), llm)
     expect(calls[0].prompt).toContain(graphToText(graph))
-    expect(calls[0].prompt).toMatch(/ĐANG CHỌN[\s\S]*n2/)
+    expect(calls[0].prompt).toMatch(/THAM CHIẾU[\s\S]*n2 \| Generate bằng API[\s\S]*e1: n1 --> n2/)
     expect(calls[0].system).toContain('REVIEW')
+  })
+
+  it('says there is no attachment when refs are empty', async () => {
+    const { llm, calls } = scripted(['{"reply":"ok","ops":[]}'])
+    await askAi({ ...input('chào'), refs: [] }, llm)
+    expect(calls[0].prompt).toContain('THAM CHIẾU\n(không đính kèm, xét cả sơ đồ)')
+  })
+
+  it('shows attachments of earlier turns in the history', async () => {
+    const { llm, calls } = scripted(['{"reply":"ok","ops":[]}'])
+    const history = [{ role: 'user' as const, text: 'tách nhỏ', refs: [{ id: 'n1', title: 'Tạo map' }] }]
+    await askAi({ ...input('tiếp'), history }, llm)
+    expect(calls[0].prompt).toContain('Người dùng: tách nhỏ [đính kèm: Tạo map (n1)]')
   })
 })

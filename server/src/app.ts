@@ -8,7 +8,7 @@ import { PROJECT_NAME, type ProjectStore } from './store'
 const AskBody = z.object({
   graph: GraphSchema,
   prevGraph: GraphSchema.optional(),
-  selection: z.array(z.string()).default([]),
+  refs: z.array(z.object({ id: z.string(), title: z.string() })).default([]),
   message: z.string().min(1),
 })
 
@@ -45,11 +45,11 @@ export function createApp(deps: { store: ProjectStore; ask: (i: AskInput) => Pro
     const name = c.req.param('name')
     const parsed = AskBody.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'Dữ liệu gửi lên không hợp lệ', issues: parsed.error.issues }, 400)
-    const { graph, prevGraph, selection, message } = parsed.data
-    const history = (await store.loadChat(name)).map(({ role, text }) => ({ role, text }))
-    await store.appendChat(name, { role: 'user', text: message, at: new Date().toISOString() })
+    const { graph, prevGraph, refs, message } = parsed.data
+    const history = (await store.loadChat(name)).map(({ role, text, refs }) => ({ role, text, refs }))
+    await store.appendChat(name, { role: 'user', text: message, at: new Date().toISOString(), ...(refs.length && { refs }) })
     try {
-      const result = await ask({ graph, prevGraph, selection, history, message })
+      const result = await ask({ graph, prevGraph, refs: refs.map((r) => r.id), history, message })
       await store.appendChat(name, { role: 'ai', text: result.reply, at: new Date().toISOString() })
       return c.json(result)
     } catch (e) {

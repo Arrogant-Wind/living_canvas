@@ -12,7 +12,7 @@ import {
   type TLArrowBinding,
   type TLShapeId,
 } from 'tldraw'
-import { api, type ChatMsg } from './api'
+import { api, type ChatMsg, type ChatRef } from './api'
 import { createAutosaver, type SaveStatus } from './autosave'
 import { graphId, WF_NODE } from './canvas/storeToGraph'
 import { WfNodeShapeUtil } from './canvas/WfNodeShape'
@@ -176,15 +176,38 @@ export function App() {
     [editor],
   )
 
+  // Nhóm đính kèm vào lượt chat tới. Chọn ô trên canvas (click hoặc kéo khung) là đính kèm nhóm đó;
+  // bỏ chọn thì nhóm vẫn ở lại, như file đã đính kèm. Gỡ bằng × hoặc tự gỡ sau khi gửi.
+  const [attached, setAttached] = useState<ChatRef[]>([])
+  const selectionKey = selection.map((s) => s.id).join(',')
+  useEffect(() => {
+    if (selection.length) setAttached(selection)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey])
+
+  /** Chọn và đưa các ô của một nhóm đính kèm vào giữa màn hình. */
+  const focusRefs = useCallback(
+    (refs: ChatRef[]) => {
+      if (!editor) return
+      const ids = refs.map((r) => `shape:${r.id}` as TLShapeId).filter((id) => editor.getShape(id))
+      if (!ids.length) return
+      editor.select(...ids)
+      editor.zoomToSelection({ animation: { duration: 200 } })
+    },
+    [editor],
+  )
+
   const send = useCallback(
     async (text: string) => {
       if (!editor) return
       reject()
-      setMessages((m) => [...m, { role: 'user', text }])
+      const refs = attached
+      setMessages((m) => [...m, { role: 'user', text, ...(refs.length && { refs }) }])
+      setAttached([])
       setBusy(true)
       const graph = currentGraph(editor)
       try {
-        const r = await api.ask(project, { graph, prevGraph: prevGraph.current, selection: selection.map((s) => s.id), message: text })
+        const r = await api.ask(project, { graph, prevGraph: prevGraph.current, refs, message: text })
         prevGraph.current = graph
         const bad = (await propose(r.reply, r.ops)) + r.dropped.length
         setMessages((m) => [
@@ -198,7 +221,7 @@ export function App() {
         setBusy(false)
       }
     },
-    [editor, propose, reject, selection],
+    [editor, propose, reject, attached],
   )
 
   const onAccept = (keys?: string[]) => {
@@ -234,7 +257,15 @@ export function App() {
           />
         )}
       </div>
-      <ChatPanel messages={messages} selection={selection} busy={busy} onSend={send} saveStatus={saveStatus} />
+      <ChatPanel
+        messages={messages}
+        attached={attached}
+        onDetach={(id) => setAttached((a) => (id ? a.filter((r) => r.id !== id) : []))}
+        onFocusRefs={focusRefs}
+        busy={busy}
+        onSend={send}
+        saveStatus={saveStatus}
+      />
     </div>
   )
 }

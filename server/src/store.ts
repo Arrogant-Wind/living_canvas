@@ -1,10 +1,17 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+/** Node người dùng đính kèm vào lượt chat. Giữ cả tên để lịch sử vẫn đọc được khi node đã đổi/xóa. */
+export interface ChatRef {
+  id: string
+  title: string
+}
+
 export interface ChatMsg {
   role: 'user' | 'ai'
   text: string
   at: string
+  refs?: ChatRef[]
 }
 
 export const PROJECT_NAME = /^[a-z0-9-]+$/

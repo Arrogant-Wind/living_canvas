@@ -1,4 +1,4 @@
-import { AiReplySchema, diffGraphs, diffToText, graphToText, validateOps, type Graph, type Op, type OpError } from '@lc/shared'
+import { AiReplySchema, diffGraphs, diffToText, graphToText, refToText, validateOps, type Graph, type Op, type OpError } from '@lc/shared'
 import { config } from './config'
 import { extractJson } from './json'
 import { runPi } from './pi'
@@ -17,8 +17,9 @@ export function parseIntent(message: string): { intent: Intent; text: string } {
 export interface AskInput {
   graph: Graph
   prevGraph?: Graph
-  selection: string[]
-  history: { role: 'user' | 'ai'; text: string }[]
+  /** Id các node người dùng đính kèm vào lượt chat này. */
+  refs: string[]
+  history: { role: 'user' | 'ai'; text: string; refs?: { id: string; title: string }[] }[]
   message: string
 }
 
@@ -33,23 +34,21 @@ export type Llm = (system: string, prompt: string) => Promise<string>
 const defaultLlm: Llm = (system, prompt) => runPi({ system, prompt })
 
 export function buildPrompt(input: AskInput, text: string): string {
-  const sel = input.selection.length
-    ? input.graph.nodes
-        .filter((n) => input.selection.includes(n.id))
-        .map((n) => `${n.id} | ${n.title}`)
-        .join('\n')
-    : '(không chọn gì, xét cả sơ đồ)'
+  const ref = refToText(input.graph, input.refs) || '(không đính kèm, xét cả sơ đồ)'
   const diff = input.prevGraph
     ? diffToText(diffGraphs(input.prevGraph, input.graph), input.graph, input.prevGraph)
     : '(lượt đầu)'
   const hist = input.history
     .slice(-6)
-    .map((h) => `${h.role === 'user' ? 'Người dùng' : 'AI'}: ${h.text}`)
+    .map((h) => {
+      const att = h.refs?.length ? ` [đính kèm: ${h.refs.map((r) => `${r.title} (${r.id})`).join(', ')}]` : ''
+      return `${h.role === 'user' ? 'Người dùng' : 'AI'}: ${h.text}${att}`
+    })
     .join('\n')
   return [
     `SƠ ĐỒ\n${graphToText(input.graph)}`,
     `THAY ĐỔI TỪ LƯỢT TRƯỚC\n${diff}`,
-    `ĐANG CHỌN\n${sel}`,
+    `THAM CHIẾU\n${ref}`,
     `HỘI THOẠI GẦN ĐÂY\n${hist || '(chưa có)'}`,
     `YÊU CẦU\n${text || '(làm theo nhiệm vụ)'}`,
   ].join('\n\n')

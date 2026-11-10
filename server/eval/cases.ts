@@ -4,7 +4,7 @@ import type { AskResult } from '../src/orchestrator'
 export interface EvalCase {
   id: string
   graph: Graph
-  selection: string[]
+  refs: string[]
   message: string
   /** null = đạt; chuỗi = lý do trượt. */
   check: (r: AskResult) => string | null
@@ -34,7 +34,7 @@ export const cases: EvalCase[] = [
       edges: [flow('e1', 'n1', 'n2')],
       notes: [],
     },
-    selection: [],
+    refs: [],
     message: '/review',
     check: (r) =>
       r.ops.some((o) => o.op === 'add_note' && o.kind === 'review' && /prompt/i.test(o.text))
@@ -44,7 +44,7 @@ export const cases: EvalCase[] = [
   {
     id: 'expand-video',
     graph: video,
-    selection: ['n4'],
+    refs: ['n4'],
     message: '/expand video lịch sử cần nhân vật, bối cảnh, nhịp độ, B-roll',
     check: (r) =>
       count(r, 'add_node') < 3
@@ -60,7 +60,7 @@ export const cases: EvalCase[] = [
       edges: [flow('e1', 'n1', 'n2'), flow('e2', 'n1', 'n5'), flow('e3', 'n1', 'n6')],
       notes: [{ id: 'c1', text: 'Nhân vật, bối cảnh thuộc bước chuẩn hóa, không song song', author: 'user', targetIds: ['n5', 'n6'], kind: 'comment' }],
     },
-    selection: ['n5', 'n6'],
+    refs: ['n5', 'n6'],
     message: 'Nhân vật, bối cảnh thuộc bước chuẩn hóa chứ không song song với nó. Sửa giúp.',
     check: (r) => {
       const moved = r.ops.filter((o) => o.op === 'set_parent' && o.parent === 'n2').map((o) => (o as any).id)
@@ -70,7 +70,7 @@ export const cases: EvalCase[] = [
   {
     id: 'insert-between',
     graph: video,
-    selection: ['n3', 'n4'],
+    refs: ['n3', 'n4'],
     message: 'Generate cần prompt. Chèn một bước gom cảnh thành prompt vào giữa Tạo map và Generate.',
     check: (r) => {
       if (count(r, 'add_node') < 1) return 'không thêm bước'
@@ -81,14 +81,14 @@ export const cases: EvalCase[] = [
   {
     id: 'explain-noop',
     graph: video,
-    selection: ['n2'],
+    refs: ['n2'],
     message: '/explain',
     check: (r) => (r.ops.length ? `explain mà vẫn có ${r.ops.length} op` : r.reply.trim() ? null : 'reply rỗng'),
   },
   {
     id: 'noop-chat',
     graph: video,
-    selection: [],
+    refs: [],
     message: 'chào bạn',
     check: (r) => (r.ops.length ? `có ${r.ops.length} op` : r.reply.trim() ? null : 'reply rỗng'),
   },

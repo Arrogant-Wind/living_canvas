@@ -38,15 +38,17 @@ describe('API', () => {
       seen = i
       return { reply: 'Đã xem', ops: [], dropped: [] }
     })
-    const res = await app.request('/api/projects/demo/ask', json({ graph, selection: ['n1'], message: '/review' }))
+    const res = await app.request('/api/projects/demo/ask', json({ graph, refs: [{ id: 'n1', title: 'A' }], message: '/review' }))
     expect(res.status).toBe(200)
     expect((await res.json()).reply).toBe('Đã xem')
-    expect(seen?.selection).toEqual(['n1'])
+    expect(seen?.refs).toEqual(['n1'])
     const chat = await (await app.request('/api/projects/demo/chat')).json()
     expect(chat.messages.map((m: any) => [m.role, m.text])).toEqual([
       ['user', '/review'],
       ['ai', 'Đã xem'],
     ])
+    expect(chat.messages[0].refs).toEqual([{ id: 'n1', title: 'A' }])
+    expect(chat.messages[1].refs).toBeUndefined()
   })
 
   it('passes earlier chat as history', async () => {
@@ -55,8 +57,8 @@ describe('API', () => {
       histories.push(i.history.length)
       return { reply: 'ok', ops: [], dropped: [] }
     })
-    await app.request('/api/projects/demo/ask', json({ graph, selection: [], message: 'a' }))
-    await app.request('/api/projects/demo/ask', json({ graph, selection: [], message: 'b' }))
+    await app.request('/api/projects/demo/ask', json({ graph, message: 'a' }))
+    await app.request('/api/projects/demo/ask', json({ graph, message: 'b' }))
     expect(histories).toEqual([0, 2])
   })
 
@@ -64,7 +66,7 @@ describe('API', () => {
     const { app } = setup(async () => {
       throw new PiError('not_found', 'Không tìm thấy lệnh "pi"')
     })
-    const res = await app.request('/api/projects/demo/ask', json({ graph, selection: [], message: 'x' }))
+    const res = await app.request('/api/projects/demo/ask', json({ graph, message: 'x' }))
     expect(res.status).toBe(502)
     expect((await res.json()).error).toContain('pi')
   })
@@ -84,7 +86,7 @@ describe('API', () => {
     const res = await app.request('/api/projects/demo/ask', {
       method: 'POST',
       headers: { 'content-type': 'text/plain' },
-      body: JSON.stringify({ graph, selection: [], message: 'x' }),
+      body: JSON.stringify({ graph, message: 'x' }),
     })
     expect(res.status).toBe(415)
     expect(called).toBe(false)
